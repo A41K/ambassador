@@ -15,7 +15,7 @@ export async function Navbar({
   const dollars = (balanceCents / 100).toFixed(2);
 
   return (
-    <nav className="border-b border-white/5 bg-[var(--topbar)] px-6 py-4">
+    <nav className="border-b border-foreground/10 bg-[var(--topbar)] px-6 py-4">
       <div className="mx-auto flex max-w-5xl items-center justify-between">
         <a href="/dashboard" className="flex items-center gap-3">
           <Image
@@ -39,16 +39,22 @@ export async function Navbar({
             </a>
           )}
           <a
+            href="/posters"
+            className="inline-flex h-9 items-center rounded-lg px-3 text-base tracking-wide text-white transition-opacity hover:opacity-70"
+          >
+            {t("app.navbar.posters-link")}
+          </a>
+          <a
             href="/settings"
             aria-label={t("app.navbar.settings-label")}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-opacity hover:opacity-60"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-opacity hover:opacity-70"
           >
             <Icon glyph="settings" size={20} />
           </a>
           <a
             href="/api/auth/logout"
             aria-label={t("app.navbar.sign-out-label")}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-opacity hover:opacity-60"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-opacity hover:opacity-70"
           >
             <Icon glyph="door-leave" size={20} />
           </a>

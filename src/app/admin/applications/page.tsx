@@ -76,7 +76,7 @@ export default async function AdminApplicationsPage() {
                         {t("admin.applications-list.latest")}
                       </span>
                     ) : (
-                      <span className="rounded-lg border border-white px-2 py-1 text-xs text-white">
+                      <span className="rounded-lg bg-foreground px-2 py-1 text-xs text-background">
                         {t("admin.applications-list.history")}
                       </span>
                     )}

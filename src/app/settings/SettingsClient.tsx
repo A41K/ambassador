@@ -199,7 +199,7 @@ export default function SettingsClient({
               <SelectTrigger
                 className={cn(
                   surfaceClass,
-                  "data-[state=open]:bg-card/50",
+                  "!h-14 !bg-muted data-[state=open]:!bg-muted/80",
                 )}
               >
                 <SelectValue />
@@ -234,14 +234,14 @@ export default function SettingsClient({
           <SelectTrigger
             className={cn(
               surfaceClass,
-              "data-[state=open]:bg-card/50",
+              "!h-14 !bg-muted data-[state=open]:!bg-muted/80",
             )}
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent
             position="popper"
-            side="bottom"
+            side="top"
             sideOffset={6}
             avoidCollisions={false}
             className={cn("max-h-72", selectContentClass)}

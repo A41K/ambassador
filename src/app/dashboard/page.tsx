@@ -12,12 +12,23 @@ import {
 import sql from "@/lib/db";
 import { ensureSchema } from "@/lib/ensure-schema";
 import { getSession } from "@/lib/session";
+import { DevStateSwitcher } from "./DevStateSwitcher";
 
-export default async function DashboardPage() {
+const isDev = process.env.NODE_ENV === "development";
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ devState?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect("/");
   await ensureSchema();
-  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const [t, locale, { devState }] = await Promise.all([
+    getTranslations(),
+    getLocale(),
+    searchParams,
+  ]);
 
   const [[application], [user]] = await Promise.all([
     sql`
@@ -26,9 +37,32 @@ export default async function DashboardPage() {
       ORDER BY created_at DESC LIMIT 1
     `,
     sql`
-      SELECT balance_cents, is_admin FROM users WHERE id = ${session.sub}
+      SELECT balance_cents, is_admin, ambassador_region FROM users WHERE id = ${session.sub}
     `,
   ]);
+
+  const fakeDate = new Date().toISOString();
+  const activeDevState = isDev ? (devState ?? "apply") : null;
+
+  function renderState() {
+    if (activeDevState === "ineligible") return <IneligibleRegion t={t} />;
+    if (activeDevState === "pending-checks") return <PendingAutomaticChecksApplication t={t} />;
+    if (activeDevState === "pending") return <PendingApplication createdAt={fakeDate} dateFormatLocale={locale} t={t} />;
+    if (activeDevState === "approved") return <ApprovedApplication t={t} />;
+    if (activeDevState === "rejected") return <RejectedApplication t={t} />;
+    if (activeDevState === "banned") return <RejectedPermanentlyApplication t={t} />;
+    if (activeDevState === "apply") return <NoApplication t={t} />;
+
+    // Real data
+    if (!application && user?.ambassador_region === "Other") return <IneligibleRegion t={t} />;
+    if (!application) return <NoApplication t={t} />;
+    if (application.status === APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS) return <PendingAutomaticChecksApplication t={t} />;
+    if (isPendingApplicationStatus(application.status)) return <PendingApplication createdAt={application.created_at} dateFormatLocale={locale} t={t} />;
+    if (isAcceptedApplicationStatus(application.status)) return <ApprovedApplication t={t} />;
+    if (isRejectedApplicationStatus(application.status)) return <RejectedApplication t={t} />;
+    if (isRejectedPermanentlyApplicationStatus(application.status)) return <RejectedPermanentlyApplication t={t} />;
+    return null;
+  }
 
   return (
     <main className="page-shell">
@@ -38,31 +72,34 @@ export default async function DashboardPage() {
           {t("dashboard.heading", { name: session.displayName })}
         </h1>
         <hr className="mt-6 border-white/10" />
-
-        <div className="mt-8">
-          {!application && <NoApplication t={t} />}
-          {application?.status === APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS && (
-            <PendingAutomaticChecksApplication t={t} />
-          )}
-          {application && isPendingApplicationStatus(application.status) && application.status !== APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS && (
-            <PendingApplication
-              createdAt={application.created_at}
-              dateFormatLocale={locale}
-              t={t}
-            />
-          )}
-          {application && isAcceptedApplicationStatus(application.status) && (
-            <ApprovedApplication t={t} />
-          )}
-          {application && isRejectedApplicationStatus(application.status) && (
-            <RejectedApplication t={t} />
-          )}
-          {application && isRejectedPermanentlyApplicationStatus(application.status) && (
-            <RejectedPermanentlyApplication t={t} />
-          )}
-        </div>
+        <div className="mt-8">{renderState()}</div>
       </div>
+      {isDev && <DevStateSwitcher current={activeDevState ?? "apply"} />}
     </main>
+  );
+}
+
+function IneligibleRegion({
+  t,
+}: {
+  t: (key: string, values?: Record<string, number | string>) => string;
+}) {
+  return (
+    <div>
+      <div className="mb-1 text-sm tracking-widest text-primary">
+        {t("dashboard.ineligible-region.eyebrow")}
+      </div>
+      <h2 className="font-sub text-3xl text-white">{t("dashboard.ineligible-region.title")}</h2>
+      <p className="mt-3 text-lg leading-relaxed text-white">
+        {t("dashboard.ineligible-region.body")}
+      </p>
+      <a
+        href="/settings"
+        className="mt-6 inline-flex h-12 items-center rounded-xl bg-primary px-8 text-lg tracking-wide text-white transition-opacity hover:opacity-80"
+      >
+        {t("dashboard.ineligible-region.cta")}
+      </a>
+    </div>
   );
 }
 

@@ -17,12 +17,18 @@ app:
   navbar:
     logo-alt: Ambassador
     admin-link: Admin
+    posters-link: Posters
     refresh-session: Refresh session
     settings-label: Settings
     sign-out-label: Sign out
 
 dashboard:
   heading: "Hey, {name}!"
+  ineligible-region:
+    eyebrow: Not Available
+    title: Applications not open in your region
+    body: "Unfortunately, the Ambassador program isn't currently available in your region. Update your region in settings if you think this is a mistake."
+    cta: Update region
   no-application:
     eyebrow: Get Started
     title: Apply to be an Ambassador
@@ -50,6 +56,9 @@ dashboard:
     eyebrow: Permanently Rejected
     title: Application Closed
     body: Your latest application has been permanently rejected. Contact the team directly if you believe this needs review.
+
+posters:
+  heading: Posters
 
 settings:
   heading: Settings
@@ -115,8 +124,8 @@ common:
 
 status:
   pending: Pending
-  pending-automatic-checks: Pending Automatic Checks
-  pending-review: Pending Review
+  pending-automatic-checks: Pending
+  pending-review: Pending
   approved: Approved
   accepted: Accepted
   rejected: Rejected
@@ -138,9 +147,9 @@ admin:
       visitors-detail: "{count} total hits tracked"
       signups: Signups
       signups-detail: "{percent} of visitors"
-      applicants: Applicants
+      applicants: Applications
       applicants-detail: "{count} total form submissions"
-      pending-review: Pending review
+      pending-review: Pending Review
       pending-review-detail: "{count} latest applications already reviewed"
     charts:
       recent-activity-eyebrow: Recent activity
@@ -173,7 +182,7 @@ admin:
     title: Applications
     columns:
       applicant: Applicant
-      name-on-app: Name on App
+      name-on-app: Name
       status: Status
       location: Location
       submitted: Submitted

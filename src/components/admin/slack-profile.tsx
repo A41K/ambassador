@@ -1,3 +1,9 @@
+function resolveDisplayName(value?: string | null) {
+  const trimmed = value?.trim();
+
+  return trimmed && trimmed.length > 0 ? trimmed : "Unknown";
+}
+
 export function SlackAvatar({
   slackId,
   fallbackName,
@@ -5,11 +11,12 @@ export function SlackAvatar({
   textClassName = "text-base",
 }: {
   slackId?: string | null;
-  fallbackName: string;
+  fallbackName?: string | null;
   sizeClassName?: string;
   textClassName?: string;
 }) {
-  const initial = fallbackName.trim().charAt(0).toUpperCase() || "?";
+  const displayName = resolveDisplayName(fallbackName);
+  const initial = displayName.charAt(0).toUpperCase() || "?";
 
   return (
     <div
@@ -17,7 +24,7 @@ export function SlackAvatar({
     >
       {slackId ? (
         <div
-          aria-label={fallbackName}
+          aria-label={displayName}
           className="h-full w-full rounded-full bg-cover bg-center bg-no-repeat"
           style={{ backgroundImage: `url("https://cachet.dunkirk.sh/users/${slackId}/r")` }}
         />
@@ -41,9 +48,9 @@ export function SlackProfile({
   label: string;
   slackName?: string | null;
   slackId?: string | null;
-  fallbackName: string;
+  fallbackName?: string | null;
 }) {
-  const displayName = slackName ?? fallbackName;
+  const displayName = resolveDisplayName(slackName ?? fallbackName);
 
   return (
     <div className="grid gap-2 sm:grid-cols-[14rem_minmax(0,1fr)] sm:gap-4">
