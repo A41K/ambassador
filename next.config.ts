@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
   experimental: {
     authInterrupts: true,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "fonts.gstatic.com",
+        pathname: "/s/e/notoemoji/**",
+      },
+    ],
+  },
 };
 
 export default withNextIntl(nextConfig);

@@ -1,15 +1,30 @@
 import Icon from "@hackclub/icons";
+import Image from "next/image";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { Input } from "@/components/ui/input";
+import { getSession } from "@/lib/session";
 
 export default async function LoginPage() {
+  const session = await getSession();
+  if (session) redirect("/dashboard");
+
   const t = await getTranslations();
 
   return (
     <main className="page-shell flex items-center justify-center px-6">
       <div className="flex w-full max-w-sm flex-col">
-        <h1 className="text-4xl font-bold text-white">{t("app.login.title")}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-4xl font-bold text-white">{t("app.login.title")}</h1>
+          <Image
+            src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f44b/emoji.svg"
+            alt="Waving hand"
+            width={40}
+            height={40}
+            className="h-10 w-10"
+          />
+        </div>
         <p className="mt-1 text-lg leading-tight text-white">
           <strong>{t("app.login.login")}</strong>{" "}
           <span className="font-normal">{t("app.login.or")}</span>{" "}
