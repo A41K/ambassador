@@ -8,6 +8,7 @@ import { Tracker } from "@/components/tracker";
 const instrumentSans = Instrument_Sans({
   variable: "--font-instrument",
   subsets: ["latin"],
+  style: ["normal", "italic"],
 });
 
 const jersey25 = Jersey_25({
