@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-instrument);
+  --font-jersey: var(--font-jersey);
+
+  --color-primary: #ec3750;
+  --color-orange: #ffbf71;
+  --color-purple: #312e4d;
+}
+
+@layer base {
+  html {
+    font-size: max(16px, 1.25vw);
+  }
+}
+
+@utility bg-grid {
+  background-image: url("/bg-grid.svg");
+  background-position: center;
+  background-repeat: repeat;
+}
+
+@utility bg-noise {
+  background-image: url("/bg-noise.png");
+  background-repeat: repeat;
+}
+
+@utility corner-squircle {
+  corner-shape: squircle;
+}
