@@ -1,0 +1,7 @@
+ALTER TABLE posters
+  ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS location_accuracy DOUBLE PRECISION;
+
+CREATE INDEX IF NOT EXISTS idx_posters_latlng ON posters(latitude, longitude)
+  WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
