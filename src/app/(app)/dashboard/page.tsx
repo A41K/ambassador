@@ -1,7 +1,10 @@
+import Icon from "@hackclub/icons";
 import { redirect } from "next/navigation";
+import type { ComponentProps, ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { Navbar } from "@/components/navbar";
+import { buttonVariants } from "@/components/ui/button";
 import {
   APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS,
   isAcceptedApplicationStatus,
@@ -12,9 +15,32 @@ import {
 import sql from "@/lib/db";
 import { ensureSchema } from "@/lib/ensure-schema";
 import { getSession } from "@/lib/session";
+import { resolveAmbassadorRegion } from "@/lib/settings";
+import { cn } from "@/lib/utils";
 import { DevStateSwitcher } from "./DevStateSwitcher";
 
 const isDev = process.env.NODE_ENV === "development";
+
+type DashboardTranslations = (key: string, values?: Record<string, number | string>) => string;
+type IconGlyph = NonNullable<ComponentProps<typeof Icon>["glyph"]>;
+type Tone = "primary" | "accent" | "acceptance" | "rejection";
+type StepKey = "apply" | "verify" | "review" | "decision";
+type Decision = "approved" | "rejected" | "banned" | null;
+
+const toneText: Record<Tone, string> = {
+  primary: "text-primary",
+  accent: "text-accent",
+  acceptance: "text-acceptance",
+  rejection: "text-rejection",
+};
+const toneBg: Record<Tone, string> = {
+  primary: "bg-primary",
+  accent: "bg-accent",
+  acceptance: "bg-acceptance",
+  rejection: "bg-rejection",
+};
+
+const STEP_ORDER: StepKey[] = ["apply", "verify", "review", "decision"];
 
 export default async function DashboardPage({
   searchParams,
@@ -37,93 +63,251 @@ export default async function DashboardPage({
       ORDER BY created_at DESC LIMIT 1
     `,
     sql`
-      SELECT balance_cents, is_admin, ambassador_region FROM users WHERE id = ${session.sub}
+      SELECT balance_cents, is_admin, ambassador_region, country_name FROM users WHERE id = ${session.sub}
     `,
   ]);
 
   const fakeDate = new Date().toISOString();
   const activeDevState = isDev ? (devState ?? "apply") : null;
 
-  function renderState() {
-    if (activeDevState === "ineligible") return <IneligibleRegion t={t} />;
-    if (activeDevState === "pending-checks") return <PendingAutomaticChecksApplication t={t} />;
-    if (activeDevState === "pending") return <PendingApplication createdAt={fakeDate} dateFormatLocale={locale} t={t} />;
-    if (activeDevState === "approved") return <ApprovedApplication t={t} />;
-    if (activeDevState === "rejected") return <RejectedApplication t={t} />;
-    if (activeDevState === "banned") return <RejectedPermanentlyApplication t={t} />;
-    if (activeDevState === "apply") return <NoApplication t={t} />;
-
-    // Real data
-    if (!application && user?.ambassador_region === "Other") return <IneligibleRegion t={t} />;
-    if (!application) return <NoApplication t={t} />;
-    if (application.status === APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS) return <PendingAutomaticChecksApplication t={t} />;
-    if (isPendingApplicationStatus(application.status)) return <PendingApplication createdAt={application.created_at} dateFormatLocale={locale} t={t} />;
-    if (isAcceptedApplicationStatus(application.status)) return <ApprovedApplication t={t} />;
-    if (isRejectedApplicationStatus(application.status)) return <RejectedApplication t={t} />;
-    if (isRejectedPermanentlyApplicationStatus(application.status)) return <RejectedPermanentlyApplication t={t} />;
-    return null;
-  }
+  const resolved = resolveState({
+    activeDevState,
+    application: application as { status: string; created_at: string } | undefined,
+    user: user as
+      | { ambassador_region?: string | null; country_name?: string | null }
+      | undefined,
+    locale,
+    fakeDate,
+    t,
+  });
+  const showAmbassadorRing = resolved.decision === "approved";
 
   return (
     <main className="page-shell">
       <Navbar isAdmin={Boolean(user?.is_admin)} balanceCents={user?.balance_cents ?? 0} />
-      <div className="mx-auto max-w-2xl px-6 py-12">
-        <h1 className="text-4xl text-white">
-          {t("dashboard.heading", { name: session.displayName })}
-        </h1>
-        <hr className="mt-6 border-white/10" />
-        <div className="mt-8">{renderState()}</div>
+      <div className="mx-auto max-w-3xl px-6 py-12">
+        <header className="flex items-center gap-2 md:gap-3">
+          <h1 className="font-sub text-4xl leading-none text-white md:text-5xl">
+            {t("dashboard.heading", { name: session.displayName })}
+          </h1>
+          {showAmbassadorRing ? (
+            <AmbassadorCircleText className="h-14 w-14 shrink-0 md:h-16 md:w-16" />
+          ) : null}
+        </header>
+
+        {resolved.activeStep ? (
+          <div className="mt-10">
+            <JourneyStepper activeStep={resolved.activeStep} decision={resolved.decision} t={t} />
+          </div>
+        ) : null}
+
+        <div className="mt-8">{resolved.node}</div>
       </div>
       {isDev && <DevStateSwitcher current={activeDevState ?? "apply"} />}
     </main>
   );
 }
 
-function IneligibleRegion({
+function resolveState({
+  activeDevState,
+  application,
+  user,
+  locale,
+  fakeDate,
   t,
 }: {
-  t: (key: string, values?: Record<string, number | string>) => string;
+  activeDevState: string | null;
+  application: { status: string; created_at: string } | undefined;
+  user: { ambassador_region?: string | null; country_name?: string | null } | undefined;
+  locale: string;
+  fakeDate: string;
+  t: DashboardTranslations;
+}): { node: ReactNode; activeStep: StepKey | null; decision: Decision } {
+  const ineligible = { node: <IneligibleRegion t={t} />, activeStep: "apply" as const, decision: null };
+  const apply = { node: <NoApplication t={t} />, activeStep: "apply" as const, decision: null };
+  const verify = { node: <PendingAutomaticChecksApplication t={t} />, activeStep: "verify" as const, decision: null };
+  const pending = (createdAt: string) => ({
+    node: <PendingApplication createdAt={createdAt} dateFormatLocale={locale} t={t} />,
+    activeStep: "review" as const,
+    decision: null,
+  });
+  const approved = { node: <ApprovedApplication t={t} />, activeStep: "decision" as const, decision: "approved" as const };
+  const rejected = { node: <RejectedApplication t={t} />, activeStep: "apply" as const, decision: null };
+  const banned = { node: <RejectedPermanentlyApplication t={t} />, activeStep: "decision" as const, decision: "banned" as const };
+
+  if (activeDevState === "ineligible") return ineligible;
+  if (activeDevState === "pending-checks") return verify;
+  if (activeDevState === "pending") return pending(fakeDate);
+  if (activeDevState === "approved") return approved;
+  if (activeDevState === "rejected") return rejected;
+  if (activeDevState === "banned") return banned;
+  if (activeDevState === "apply") return apply;
+
+  const resolvedRegion = resolveAmbassadorRegion(
+    user?.ambassador_region ?? null,
+    user?.country_name ?? null,
+  );
+
+  if (!application && resolvedRegion === "Other") return ineligible;
+  if (!application) return apply;
+  if (application.status === APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS) return verify;
+  if (isPendingApplicationStatus(application.status)) return pending(application.created_at);
+  if (isAcceptedApplicationStatus(application.status)) return approved;
+  if (isRejectedApplicationStatus(application.status)) return rejected;
+  if (isRejectedPermanentlyApplicationStatus(application.status)) return banned;
+  return { node: null, activeStep: null, decision: null };
+}
+
+function JourneyStepper({
+  activeStep,
+  decision,
+  t,
+}: {
+  activeStep: StepKey;
+  decision: Decision;
+  t: DashboardTranslations;
 }) {
+  const activeIdx = STEP_ORDER.indexOf(activeStep);
+  const progressRatio = Math.max(0, activeIdx) / (STEP_ORDER.length - 1);
+
   return (
-    <div>
-      <div className="mb-1 text-sm tracking-widest text-primary">
-        {t("dashboard.ineligible-region.eyebrow")}
-      </div>
-      <h2 className="font-sub text-3xl text-white">{t("dashboard.ineligible-region.title")}</h2>
-      <p className="mt-3 text-lg leading-relaxed text-white">
-        {t("dashboard.ineligible-region.body")}
-      </p>
-      <a
-        href="/settings"
-        className="mt-6 inline-flex h-12 items-center rounded-xl bg-primary px-8 text-lg tracking-wide text-white transition-opacity hover:opacity-80"
-      >
-        {t("dashboard.ineligible-region.cta")}
-      </a>
+    <div className="relative">
+      <span aria-hidden className="absolute left-5 right-5 top-5 h-px bg-foreground/15" />
+      <span
+        aria-hidden
+        className="absolute left-5 top-5 h-px bg-foreground"
+        style={{ width: `calc((100% - 2.5rem) * ${progressRatio})` }}
+      />
+      <ol className="relative flex items-start justify-between gap-3">
+        {STEP_ORDER.map((key, i) => {
+          const isActive = i === activeIdx;
+          const isComplete = i < activeIdx;
+          const isDecisionStep = key === "decision";
+
+          const decisionTone: Tone | null =
+            isDecisionStep && decision === "approved"
+              ? "acceptance"
+              : isDecisionStep && (decision === "rejected" || decision === "banned")
+                ? "rejection"
+                : null;
+
+          const activeTone: Tone = decisionTone ?? "primary";
+
+          const circleClass = isActive
+            ? cn("text-white border-transparent", toneBg[activeTone])
+            : isComplete
+              ? "bg-foreground text-background border-foreground"
+              : "border-foreground/15 bg-background text-muted-foreground";
+
+          const labelClass = isActive
+            ? cn("font-bold", toneText[activeTone])
+            : isComplete
+              ? "text-foreground"
+              : "text-muted-foreground";
+
+          return (
+            <li key={key} className="flex min-w-10 flex-col items-center gap-2">
+              <span
+                className={cn(
+                  "relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold",
+                  circleClass,
+                )}
+              >
+                {isComplete ? <Icon glyph="checkmark" size={20} /> : i + 1}
+              </span>
+              <span className={cn("text-center text-xs", labelClass)}>
+                {t(`dashboard.stepper.${key}`)}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
 
-function NoApplication({
-  t,
-}: {
-  t: (key: string, values?: Record<string, number | string>) => string;
-}) {
+type StatusCardProps = {
+  tone: Tone;
+  glyph: IconGlyph;
+  title: string;
+  body: string;
+  action?: {
+    href: string;
+    label: string;
+    external?: boolean;
+  };
+};
+
+function StatusCard({
+  tone,
+  glyph,
+  title,
+  body,
+  action,
+}: StatusCardProps) {
   return (
-    <div>
-      <div className="mb-1 text-sm tracking-widest text-primary">
-        {t("dashboard.no-application.eyebrow")}
+    <section>
+      <div className="flex gap-4 sm:gap-6">
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center",
+            toneText[tone],
+          )}
+        >
+          <Icon glyph={glyph} size={28} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h2 className="font-sub text-2xl text-white md:text-3xl">
+            {title}
+          </h2>
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground md:text-lg">
+            {body}
+          </p>
+
+          {action ? (
+            <a
+              href={action.href}
+              className={cn(buttonVariants({ size: "app" }), "mt-6")}
+              target={action.external ? "_blank" : undefined}
+              rel={action.external ? "noreferrer" : undefined}
+            >
+              {action.label}
+            </a>
+          ) : null}
+        </div>
       </div>
-      <h2 className="font-sub text-3xl text-white">{t("dashboard.no-application.title")}</h2>
-      <p className="mt-3 text-lg leading-relaxed text-white">
-        {t("dashboard.no-application.body")}
-      </p>
-      <a
-        href="/form"
-        className="mt-6 inline-flex h-12 items-center rounded-xl bg-primary px-8 text-lg tracking-wide text-white transition-opacity hover:opacity-80"
-      >
-        {t("dashboard.no-application.cta")}
-      </a>
-    </div>
+    </section>
+  );
+}
+
+function IneligibleRegion({ t }: { t: DashboardTranslations }) {
+  return (
+    <StatusCard
+      tone="primary"
+      glyph="map-pin"
+      title={t("dashboard.ineligible-region.title")}
+      body={t("dashboard.ineligible-region.body")}
+      action={{
+        href: "/settings",
+        label: t("dashboard.ineligible-region.cta"),
+      }}
+    />
+  );
+}
+
+function NoApplication({ t }: { t: DashboardTranslations }) {
+  return (
+    <StatusCard
+      tone="primary"
+      glyph="idea"
+      title={t("dashboard.no-application.title")}
+      body={t("dashboard.no-application.body")}
+      action={{
+        href: "/form",
+        label: t("dashboard.no-application.cta"),
+      }}
+    />
   );
 }
 
@@ -134,7 +318,7 @@ function PendingApplication({
 }: {
   createdAt: string;
   dateFormatLocale: string;
-  t: (key: string, values?: Record<string, number | string>) => string;
+  t: DashboardTranslations;
 }) {
   const submittedDate = new Date(createdAt).toLocaleDateString(dateFormatLocale, {
     month: "long",
@@ -143,100 +327,97 @@ function PendingApplication({
   });
 
   return (
-    <div>
-      <div className="mb-1 text-sm tracking-widest text-accent">
-        {t("dashboard.pending.eyebrow")}
-      </div>
-      <h2 className="font-sub text-3xl text-white">{t("dashboard.pending.title")}</h2>
-      <p className="mt-3 text-lg leading-relaxed text-white">
-        {t("dashboard.pending.body", { date: submittedDate })}
-      </p>
-      <div className="mt-6 flex items-center gap-3">
-        <div className="h-3 w-3 animate-pulse rounded-full bg-accent" />
-        <span className="text-base tracking-wide text-accent">{t("dashboard.pending.status")}</span>
-      </div>
-    </div>
+    <StatusCard
+      tone="accent"
+      glyph="clock"
+      title={t("dashboard.pending.title")}
+      body={t("dashboard.pending.body", { date: submittedDate })}
+    />
   );
 }
 
-function PendingAutomaticChecksApplication({
-  t,
-}: {
-  t: (key: string, values?: Record<string, number | string>) => string;
-}) {
+function PendingAutomaticChecksApplication({ t }: { t: DashboardTranslations }) {
   return (
-    <div>
-      <div className="mb-1 text-sm tracking-widest text-accent">
-        {t("dashboard.pending-automatic-checks.eyebrow")}
-      </div>
-      <h2 className="font-sub text-3xl text-white">
-        {t("dashboard.pending-automatic-checks.title")}
-      </h2>
-      <p className="mt-3 text-lg leading-relaxed text-white">
-        {t("dashboard.pending-automatic-checks.body")}
-      </p>
-      <a
-        href="https://auth.hackclub.com"
-        className="mt-6 inline-flex h-12 items-center rounded-xl bg-primary px-8 text-lg text-white transition-opacity hover:opacity-80"
-      >
-        {t("dashboard.pending-automatic-checks.cta")}
-      </a>
-    </div>
+    <StatusCard
+      tone="accent"
+      glyph="private"
+      title={t("dashboard.pending-automatic-checks.title")}
+      body={t("dashboard.pending-automatic-checks.body")}
+      action={{
+        href: "https://auth.hackclub.com",
+        label: t("dashboard.pending-automatic-checks.cta"),
+      }}
+    />
   );
 }
 
-function ApprovedApplication({
-  t,
-}: {
-  t: (key: string, values?: Record<string, number | string>) => string;
-}) {
+function ApprovedApplication({ t }: { t: DashboardTranslations }) {
   return (
-    <div>
-      <h2 className="font-sub text-3xl text-white">{t("dashboard.approved.title")}</h2>
-      <p className="mt-3 text-lg leading-relaxed text-white">
-        {t("dashboard.approved.body")}
-      </p>
-      <div className="mt-6 flex items-center gap-3">
-        <div className="h-3 w-3 rounded-full bg-accent" />
-        <span className="text-base tracking-wide text-accent">{t("dashboard.approved.status")}</span>
-      </div>
-      <hr className="mt-6 border-white/10" />
-    </div>
+    <StatusCard
+      tone="acceptance"
+      glyph="checkbox-checked"
+      title={t("dashboard.approved.title")}
+      body={t("dashboard.approved.body")}
+    />
   );
 }
 
-function RejectedApplication({
-  t,
-}: {
-  t: (key: string, values?: Record<string, number | string>) => string;
-}) {
+function RejectedApplication({ t }: { t: DashboardTranslations }) {
   return (
-    <div>
-      <div className="mb-1 text-sm tracking-widest text-primary">
-        {t("dashboard.rejected.eyebrow")}
-      </div>
-      <h2 className="font-sub text-3xl text-white">{t("dashboard.rejected.title")}</h2>
-      <p className="mt-3 text-lg leading-relaxed text-white">
-        {t("dashboard.rejected.body")}
-      </p>
-    </div>
+    <StatusCard
+      tone="primary"
+      glyph="idea"
+      title={t("dashboard.rejected.title")}
+      body={t("dashboard.rejected.body")}
+      action={{
+        href: "/form",
+        label: t("dashboard.rejected.cta"),
+      }}
+    />
   );
 }
 
-function RejectedPermanentlyApplication({
-  t,
-}: {
-  t: (key: string, values?: Record<string, number | string>) => string;
-}) {
+function RejectedPermanentlyApplication({ t }: { t: DashboardTranslations }) {
   return (
-    <div>
-      <div className="mb-1 text-sm tracking-widest text-primary">
-        {t("dashboard.rejected-permanently.eyebrow")}
+    <StatusCard
+      tone="rejection"
+      glyph="forbidden"
+      title={t("dashboard.rejected-permanently.title")}
+      body={t("dashboard.rejected-permanently.body")}
+    />
+  );
+}
+
+function AmbassadorCircleText({ className }: { className?: string }) {
+  const ringText = "Ambassadors • Ambassadors •";
+  const chars = [...ringText];
+  const radiusPct = 42;
+
+  return (
+    <div className={cn("inline-flex items-center justify-center", className)} aria-label="Ambassadors">
+      <span className="sr-only">Ambassadors</span>
+      <div aria-hidden className="relative h-full w-full">
+        {chars.map((char, index) => {
+          const angle = (index / chars.length) * 360 - 90;
+          const radians = (angle * Math.PI) / 180;
+          const left = 50 + radiusPct * Math.cos(radians);
+          const top = 50 + radiusPct * Math.sin(radians);
+
+          return (
+            <span
+              key={`${char}-${index}`}
+              className="absolute text-[11px] leading-none font-bold text-foreground"
+              style={{
+                left: `${left}%`,
+                top: `${top}%`,
+                transform: `translate(-50%, -50%) rotate(${angle + 90}deg)`,
+              }}
+            >
+              {char}
+            </span>
+          );
+        })}
       </div>
-      <h2 className="font-sub text-3xl text-white">{t("dashboard.rejected-permanently.title")}</h2>
-      <p className="mt-3 text-lg leading-relaxed text-white">
-        {t("dashboard.rejected-permanently.body")}
-      </p>
     </div>
   );
 }

@@ -24,6 +24,11 @@ app:
 
 dashboard:
   heading: "Hey, {name}!"
+  stepper:
+    apply: Apply
+    verify: Verify ID
+    review: Review
+    decision: Decision
   ineligible-region:
     eyebrow: Not Available
     title: Applications not open in your region
@@ -45,13 +50,15 @@ dashboard:
     body: Please ID verify at auth.hackclub.com so we can keep moving your application forward.
     cta: Verify at auth.hackclub.com
   approved:
+    eyebrow: Accepted
     title: You're an Ambassador!
-    body: Congratulations! Your application has been approved. Welcome to the team.
+    body: Your application has been approved. Welcome to the team.
     status: Active Ambassador
   rejected:
-    eyebrow: Not Accepted
-    title: Application Not Accepted
-    body: "Unfortunately your application wasn't accepted this time. Feel free to reach out if you have questions."
+    eyebrow: Try Again
+    title: Apply to be an Ambassador
+    body: "Your last application wasn't accepted this time, but you can submit a new one and we'll review it."
+    cta: Apply Again
   rejected-permanently:
     eyebrow: Permanently Rejected
     title: Application Closed

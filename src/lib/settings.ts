@@ -19,6 +19,62 @@ export const SUPPORTED_AMBASSADOR_REGIONS = [
   "Other",
 ] as const;
 
+const EU_COUNTRY_NAMES = new Set([
+  "austria",
+  "belgium",
+  "bulgaria",
+  "croatia",
+  "cyprus",
+  "czechia",
+  "denmark",
+  "estonia",
+  "finland",
+  "france",
+  "germany",
+  "greece",
+  "hungary",
+  "ireland",
+  "italy",
+  "latvia",
+  "lithuania",
+  "luxembourg",
+  "malta",
+  "netherlands",
+  "poland",
+  "portugal",
+  "romania",
+  "slovakia",
+  "slovenia",
+  "spain",
+  "sweden",
+]);
+
+const REGION_ALIASES: Record<
+  string,
+  (typeof SUPPORTED_AMBASSADOR_REGIONS)[number]
+> = {
+  "czech republic": "EU",
+  "europe": "EU",
+  "european union": "EU",
+  "great britain": "United Kingdom",
+  "england": "United Kingdom",
+  "northern ireland": "United Kingdom",
+  "scotland": "United Kingdom",
+  "uk": "United Kingdom",
+  "united kingdom of great britain and northern ireland": "United Kingdom",
+  "u.k.": "United Kingdom",
+  "u.s.": "United States",
+  "u.s.a.": "United States",
+  "usa": "United States",
+  "us": "United States",
+  "united states of america": "United States",
+  "wales": "United Kingdom",
+};
+
+function normalizeRegionName(value: string) {
+  return value.trim().toLowerCase();
+}
+
 function isHackClubAddress(value: unknown): value is HackClubAddress {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -70,13 +126,25 @@ export function resolveAmbassadorRegion(
   }
 
   if (detectedRegion) {
+    const normalizedDetectedRegion = normalizeRegionName(detectedRegion);
     const matchedRegion = SUPPORTED_AMBASSADOR_REGIONS.find(
-      (region) => region.toLowerCase() === detectedRegion.toLowerCase(),
+      (region) => normalizeRegionName(region) === normalizedDetectedRegion,
     );
 
     if (matchedRegion) {
       return matchedRegion;
     }
+
+    const aliasedRegion = REGION_ALIASES[normalizedDetectedRegion];
+    if (aliasedRegion) {
+      return aliasedRegion;
+    }
+
+    if (EU_COUNTRY_NAMES.has(normalizedDetectedRegion)) {
+      return "EU";
+    }
+
+    return "Other";
   }
 
   return "United States";
