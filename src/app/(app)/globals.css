@@ -38,6 +38,13 @@
   );
   --paper-grid-size: 16px;
   --topbar: #181818;
+  --chart-visits: var(--foreground);
+  --chart-signups: var(--secondary);
+  --chart-applications: color-mix(in srgb, var(--primary) 78%, var(--background));
+  --chart-pending: color-mix(in srgb, var(--secondary) 88%, var(--background));
+  --chart-approved: var(--acceptance);
+  --chart-rejected: color-mix(in srgb, var(--rejection) 70%, var(--secondary));
+  --chart-banned: var(--rejection);
 }
 
 @theme inline {
@@ -74,6 +81,7 @@
 
 html {
   height: 100%;
+  font-size: 16px;
   color-scheme: light;
 }
 

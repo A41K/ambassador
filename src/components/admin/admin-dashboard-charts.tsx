@@ -148,28 +148,28 @@ export function AdminDashboardCharts({
                   type="monotone"
                   dataKey="visits"
                   name={messages.visitsSeries}
-                  stroke="var(--foreground)"
+                  stroke="var(--chart-visits)"
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 4, fill: "var(--foreground)" }}
+                  activeDot={{ r: 4, fill: "var(--chart-visits)" }}
                 />
                 <Line
                   type="monotone"
                   dataKey="signups"
                   name={messages.signupsSeries}
-                  stroke="var(--secondary)"
+                  stroke="var(--chart-signups)"
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 4, fill: "var(--secondary)" }}
+                  activeDot={{ r: 4, fill: "var(--chart-signups)" }}
                 />
                 <Line
                   type="monotone"
                   dataKey="applications"
                   name={messages.applicationsSeries}
-                  stroke="var(--primary)"
+                  stroke="var(--chart-applications)"
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 4, fill: "var(--primary)" }}
+                  activeDot={{ r: 4, fill: "var(--chart-applications)" }}
                 />
               </ComposedChart>
             </DashboardResponsiveChart>
@@ -331,17 +331,17 @@ function buildApplicationFunnelData(funnelData: DashboardFunnelPoint[]) {
     {
       name: funnelData[0]?.name ?? "",
       value: visited,
-      fill: funnelData[0]?.fill ?? "var(--foreground)",
+      fill: funnelData[0]?.fill ?? "var(--chart-visits)",
     },
     {
       name: funnelData[1]?.name ?? "",
       value: signedUp,
-      fill: funnelData[1]?.fill ?? "var(--secondary)",
+      fill: funnelData[1]?.fill ?? "var(--chart-signups)",
     },
     {
       name: funnelData[2]?.name ?? "",
       value: filledForm,
-      fill: funnelData[2]?.fill ?? "var(--primary)",
+      fill: funnelData[2]?.fill ?? "var(--chart-applications)",
     },
   ].filter((step) => step.name);
 }
@@ -363,27 +363,30 @@ function buildOutcomeMetrics(
   pendingLabel: string,
 ): DashboardFlowMetric[] {
   const applicants = Math.max(funnelData[2]?.value ?? 0, 0);
-  const approved = clampToParent(funnelData[3]?.value ?? 0, applicants);
-  const denied = clampToParent(funnelData[4]?.value ?? 0, applicants);
   const pending = clampToParent(pendingCount, applicants);
+  const outcomes = funnelData.slice(3).map((step, index) => {
+    const value = clampToParent(step.value, applicants);
+    const fallbackFill =
+      index === 0
+        ? "var(--chart-approved)"
+        : index === 1
+          ? "var(--chart-rejected)"
+          : "var(--chart-banned)";
+
+    return {
+      name: step.name,
+      value,
+      fill: step.fill || fallbackFill,
+      share: applicants > 0 ? (value / applicants) * 100 : 0,
+    };
+  });
 
   return [
-    {
-      name: funnelData[3]?.name ?? "",
-      value: approved,
-      fill: funnelData[3]?.fill ?? "var(--acceptance)",
-      share: applicants > 0 ? (approved / applicants) * 100 : 0,
-    },
-    {
-      name: funnelData[4]?.name ?? "",
-      value: denied,
-      fill: funnelData[4]?.fill ?? "var(--rejection)",
-      share: applicants > 0 ? (denied / applicants) * 100 : 0,
-    },
+    ...outcomes,
     {
       name: pendingLabel,
       value: pending,
-      fill: "var(--secondary)",
+      fill: "var(--chart-pending)",
       share: applicants > 0 ? (pending / applicants) * 100 : 0,
     },
   ].filter((step) => step.name);

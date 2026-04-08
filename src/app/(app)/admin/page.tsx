@@ -8,15 +8,16 @@ import Icon from "@hackclub/icons";
 import type { Metadata } from "next";
 import type { ComponentProps } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslatedPageMetadata } from "@/i18n/metadata";
 import {
   APPLICATION_STATUS_ACCEPTED,
   APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS,
   APPLICATION_STATUS_PENDING_REVIEW,
   APPLICATION_STATUS_REJECTED,
   APPLICATION_STATUS_REJECTED_PERMANENT,
-} from "@/lib/applications";
-import sql from "@/lib/db";
-import { ensureSchema } from "@/lib/ensure-schema";
+} from "@/lib/applications/status";
+import sql from "@/lib/database/client";
+import { ensureSchema } from "@/lib/database/ensure-schema";
 
 type SummaryRow = {
   visitor_count: number;
@@ -25,7 +26,6 @@ type SummaryRow = {
   applicant_count: number;
   pending_count: number;
   approved_count: number;
-  denied_count: number;
 };
 
 type ActivityRow = {
@@ -33,6 +33,13 @@ type ActivityRow = {
   visits: number;
   signups: number;
   applications: number;
+};
+
+type OutcomeSummaryRow = {
+  pending_count: number;
+  approved_count: number;
+  rejected_count: number;
+  banned_count: number;
 };
 
 const activityRangeDays = {
@@ -44,9 +51,9 @@ const activityRangeDays = {
 
 type ActivityRange = keyof typeof activityRangeDays;
 
-export const metadata: Metadata = {
-  title: "Admin // Overview",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return getTranslatedPageMetadata("admin.overview.metadata.title");
+}
 
 export default async function AdminDashboard({
   searchParams,
@@ -63,7 +70,7 @@ export default async function AdminDashboard({
     day: "numeric",
   });
 
-  const [summaryRows, activityRows] = await Promise.all([
+  const [summaryRows, activityRows, outcomeRows] = await Promise.all([
     sql<SummaryRow[]>`
       WITH latest_applications AS (
         SELECT DISTINCT ON (user_id) user_id, status
@@ -99,15 +106,7 @@ export default async function AdminDashboard({
           SELECT COUNT(*)::int
           FROM latest_applications
           WHERE status = ${APPLICATION_STATUS_ACCEPTED}
-        ) AS approved_count,
-        (
-          SELECT COUNT(*)::int
-          FROM latest_applications
-          WHERE status IN (
-            ${APPLICATION_STATUS_REJECTED},
-            ${APPLICATION_STATUS_REJECTED_PERMANENT}
-          )
-        ) AS denied_count
+        ) AS approved_count
     `,
     sql<ActivityRow[]>`
       WITH days AS (
@@ -146,9 +145,32 @@ export default async function AdminDashboard({
       LEFT JOIN application_totals ON application_totals.day = days.day
       ORDER BY days.day ASC
     `,
+    sql<OutcomeSummaryRow[]>`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE LOWER(status) IN (
+            LOWER(${APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS}),
+            LOWER(${APPLICATION_STATUS_PENDING_REVIEW})
+          )
+        )::int AS pending_count,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = LOWER(${APPLICATION_STATUS_ACCEPTED})
+        )::int AS approved_count,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = LOWER(${APPLICATION_STATUS_REJECTED})
+        )::int AS rejected_count,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) IN (
+            LOWER(${APPLICATION_STATUS_REJECTED_PERMANENT}),
+            LOWER('Rejected Permanent')
+          )
+        )::int AS banned_count
+      FROM applications
+    `,
   ]);
 
   const summary = summaryRows[0];
+  const outcomeSummary = outcomeRows[0];
 
   const activityData: DashboardActivityPoint[] = activityRows.map((row) => ({
     label: activityLabelFormatter.format(new Date(row.day)),
@@ -160,18 +182,23 @@ export default async function AdminDashboard({
   const decisionData: DashboardBreakdownPoint[] = [
     {
       label: t("admin.overview.charts.series.pending"),
-      value: summary.pending_count,
-      fill: "var(--secondary)",
+      value: outcomeSummary.pending_count,
+      fill: "var(--chart-pending)",
     },
     {
       label: t("admin.overview.charts.series.approved"),
-      value: summary.approved_count,
-      fill: "var(--acceptance)",
+      value: outcomeSummary.approved_count,
+      fill: "var(--chart-approved)",
     },
     {
-      label: t("admin.overview.charts.series.denied"),
-      value: summary.denied_count,
-      fill: "var(--rejection)",
+      label: t("admin.overview.charts.series.rejected"),
+      value: outcomeSummary.rejected_count,
+      fill: "var(--chart-rejected)",
+    },
+    {
+      label: t("admin.overview.charts.series.banned"),
+      value: outcomeSummary.banned_count,
+      fill: "var(--chart-banned)",
     },
   ];
 
@@ -179,27 +206,32 @@ export default async function AdminDashboard({
     {
       name: t("admin.overview.charts.series.visited-website"),
       value: summary.visitor_count,
-      fill: "var(--foreground)",
+      fill: "var(--chart-visits)",
     },
     {
       name: t("admin.overview.charts.series.signed-up"),
       value: summary.signup_count,
-      fill: "var(--secondary)",
+      fill: "var(--chart-signups)",
     },
     {
       name: t("admin.overview.charts.series.filled-form"),
       value: summary.applicant_count,
-      fill: "var(--primary)",
+      fill: "var(--chart-applications)",
     },
     {
       name: t("admin.overview.charts.series.approved"),
-      value: summary.approved_count,
-      fill: "var(--acceptance)",
+      value: outcomeSummary.approved_count,
+      fill: "var(--chart-approved)",
     },
     {
-      name: t("admin.overview.charts.series.denied"),
-      value: summary.denied_count,
-      fill: "var(--rejection)",
+      name: t("admin.overview.charts.series.rejected"),
+      value: outcomeSummary.rejected_count,
+      fill: "var(--chart-rejected)",
+    },
+    {
+      name: t("admin.overview.charts.series.banned"),
+      value: outcomeSummary.banned_count,
+      fill: "var(--chart-banned)",
     },
   ];
 
@@ -247,7 +279,7 @@ export default async function AdminDashboard({
         activityData={activityData}
         decisionData={decisionData}
         funnelData={funnelData}
-        pendingCount={summary.pending_count}
+        pendingCount={outcomeSummary.pending_count}
         locale={locale}
         activeRange={activeRange}
         rangeOptions={rangeOptions}
