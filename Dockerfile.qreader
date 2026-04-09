@@ -14,6 +14,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
+ENV PORT=4445
+
 COPY qreader/pyproject.toml ./pyproject.toml
 
 RUN python -c "import tomllib; from pathlib import Path; data = tomllib.loads(Path('pyproject.toml').read_text()); deps = data.get('project', {}).get('dependencies', []); Path('requirements.txt').write_text('\n'.join(deps) + '\n')"
@@ -22,8 +24,10 @@ RUN uv pip install --system --no-cache -r requirements.txt
 
 COPY qreader/main.py ./main.py
 
+STOPSIGNAL SIGTERM
+
 HEALTHCHECK --interval=10s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -fsS http://localhost:4445/health || exit 1
+  CMD sh -c 'curl -fsS "http://127.0.0.1:${PORT:-4445}/health" || exit 1'
 
 EXPOSE 4445
 

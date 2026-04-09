@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.25.0",
   "scripts": {
-    "dev": "concurrently -k --names app,sync --prefix-colors cyan,green \"pnpm dev:next\" \"pnpm dev:sync-loop\"",
+    "dev": "concurrently -k --names app,sync --prefix-colors cyan,green \"pnpm dev:next\" \"pnpm airtable:sync-loop\"",
     "build": "next build",
     "start": "next start",
     "lint": "pnpm lint:js && pnpm lint:ts && pnpm lint:css && pnpm lint:html",
@@ -15,8 +15,8 @@
     "type-check": "rm -rf .next/types .next/dev/types && pnpm exec next typegen && pnpm exec tsc --noEmit",
     "prune:css": "pnpm build && purgecss --css \".next/**/*.css\" --content \"src/**/*.{ts,tsx}\" --content \"src/**/*.css\" --output .next/purgecss",
     "dev:next": "next dev -p 7171",
-    "dev:sync-loop": "node scripts/dev-airtable-sync-loop.mjs",
-    "dev:sync-once": "node scripts/dev-airtable-sync-loop.mjs --once"
+    "airtable:sync-loop": "node scripts/airtable-sync-loop.mjs",
+    "airtable:sync-once": "node scripts/airtable-sync-loop.mjs --once"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1026.0",

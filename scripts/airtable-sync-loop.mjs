@@ -1,6 +1,13 @@
 const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+const LEGACY_ENV_KEYS = {
+  authToken: "DEV_AIRTABLE_SYNC_AUTH_TOKEN",
+  intervalMs: "DEV_AIRTABLE_SYNC_INTERVAL_MS",
+  timeoutMs: "DEV_AIRTABLE_SYNC_TIMEOUT_MS",
+  url: "DEV_AIRTABLE_SYNC_URL",
+};
+
 function parsePositiveInt(value, fallback) {
   if (!value) return fallback;
 
@@ -16,8 +23,26 @@ function formatError(error) {
   return String(error);
 }
 
+function readStringEnv(name, legacyName) {
+  const value = process.env[name]?.trim();
+  if (value) return value;
+
+  const legacyValue = legacyName ? process.env[legacyName]?.trim() : "";
+  if (legacyValue) {
+    console.warn(`[airtable-sync] ${legacyName} is deprecated. Use ${name} instead.`);
+    return legacyValue;
+  }
+
+  return "";
+}
+
+function readPositiveIntEnv(name, fallback, legacyName) {
+  const value = readStringEnv(name, legacyName);
+  return parsePositiveInt(value, fallback);
+}
+
 function getSyncUrl() {
-  const explicitUrl = process.env.DEV_AIRTABLE_SYNC_URL?.trim();
+  const explicitUrl = readStringEnv("AIRTABLE_SYNC_URL", LEGACY_ENV_KEYS.url);
   if (explicitUrl) return explicitUrl;
 
   const baseUrl = process.env.CURRENT_DOMAIN?.trim() || "http://localhost:7171";
@@ -25,15 +50,24 @@ function getSyncUrl() {
   return new URL("/api/cron/applications/sync", baseUrl).toString();
 }
 
-if (process.env.NODE_ENV === "production") {
-  console.error("[airtable-sync-loop] Refusing to run in production.");
-  process.exit(1);
+function getAuthToken() {
+  return (
+    readStringEnv("AIRTABLE_SYNC_AUTH_TOKEN", LEGACY_ENV_KEYS.authToken) ||
+    process.env.CRON_SECRET?.trim() ||
+    ""
+  );
 }
 
-const intervalMs = parsePositiveInt(process.env.DEV_AIRTABLE_SYNC_INTERVAL_MS, DEFAULT_INTERVAL_MS);
-const timeoutMs = parsePositiveInt(process.env.DEV_AIRTABLE_SYNC_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
+const intervalMs = readPositiveIntEnv("AIRTABLE_SYNC_INTERVAL_MS", DEFAULT_INTERVAL_MS, LEGACY_ENV_KEYS.intervalMs);
+const timeoutMs = readPositiveIntEnv("AIRTABLE_SYNC_TIMEOUT_MS", DEFAULT_TIMEOUT_MS, LEGACY_ENV_KEYS.timeoutMs);
 const syncUrl = getSyncUrl();
+const authToken = getAuthToken();
 const runOnce = process.argv.includes("--once");
+
+if (process.env.NODE_ENV === "production" && !authToken) {
+  console.error("[airtable-sync] CRON_SECRET or AIRTABLE_SYNC_AUTH_TOKEN is required in production.");
+  process.exit(1);
+}
 
 let inFlight = false;
 let timer = null;
@@ -49,7 +83,8 @@ async function runSync() {
       method: "GET",
       signal: AbortSignal.timeout(timeoutMs),
       headers: {
-        "user-agent": "dev-airtable-sync-loop/1.0",
+        ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
+        "user-agent": "airtable-sync-loop/1.0",
       },
       cache: "no-store",
     });
@@ -68,7 +103,7 @@ async function runSync() {
 
     if (!response.ok) {
       console.error(
-        `[airtable-sync-loop] ${response.status} (${elapsedMs}ms) ${typeof payload === "string" ? payload : JSON.stringify(payload)}`,
+        `[airtable-sync] ${response.status} (${elapsedMs}ms) ${typeof payload === "string" ? payload : JSON.stringify(payload)}`,
       );
       return;
     }
@@ -82,14 +117,14 @@ async function runSync() {
         `matchedUsers=${payload.matchedUsers ?? "?"}`,
       ];
 
-      console.log(`[airtable-sync-loop] ok (${elapsedMs}ms) ${summaryParts.join(" ")}`);
+      console.log(`[airtable-sync] ok (${elapsedMs}ms) ${summaryParts.join(" ")}`);
       return;
     }
 
-    console.log(`[airtable-sync-loop] ok (${elapsedMs}ms)`);
+    console.log(`[airtable-sync] ok (${elapsedMs}ms)`);
   } catch (error) {
     const elapsedMs = Date.now() - startedAt;
-    console.error(`[airtable-sync-loop] failed (${elapsedMs}ms) ${formatError(error)}`);
+    console.error(`[airtable-sync] failed (${elapsedMs}ms) ${formatError(error)}`);
   } finally {
     inFlight = false;
   }
@@ -97,7 +132,7 @@ async function runSync() {
 
 function shutdown(signal) {
   if (timer) clearInterval(timer);
-  console.log(`[airtable-sync-loop] stopping (${signal})`);
+  console.log(`[airtable-sync] stopping (${signal})`);
   process.exit(0);
 }
 
@@ -110,7 +145,7 @@ if (runOnce) {
   process.exit(0);
 }
 
-console.log(`[airtable-sync-loop] running every ${Math.round(intervalMs / 1000)}s -> ${syncUrl}`);
+console.log(`[airtable-sync] running every ${Math.round(intervalMs / 1000)}s -> ${syncUrl}`);
 timer = setInterval(() => {
   void runSync();
 }, intervalMs);

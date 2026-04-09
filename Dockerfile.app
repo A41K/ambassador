@@ -16,6 +16,9 @@ RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
 
+ARG DEPLOYMENT_VERSION=dev
+ENV DEPLOYMENT_VERSION=${DEPLOYMENT_VERSION}
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -23,9 +26,11 @@ RUN pnpm build
 
 FROM base AS runner
 
+ARG DEPLOYMENT_VERSION=dev
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=7171
+ENV DEPLOYMENT_VERSION=${DEPLOYMENT_VERSION}
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
@@ -36,9 +41,11 @@ COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY --from=builder /app/src ./src
 
+STOPSIGNAL SIGTERM
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -fsS http://localhost:7171/ || exit 1
+  CMD sh -c 'curl -fsS "http://127.0.0.1:${PORT:-7171}/api/health" || exit 1'
 
 EXPOSE 7171
 
-CMD ["pnpm", "start", "-p", "7171"]
+CMD ["sh", "-c", "exec pnpm start -p ${PORT:-7171}"]
