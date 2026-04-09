@@ -91,10 +91,10 @@ async def read(request: Request, file: UploadFile = File(...)):
 
     try:
         img = Image.open(io.BytesIO(data))
-    except Exception as e:
+    except Exception:
         return JSONResponse(
             status_code=400,
-            content={"error": f"invalid image format: {str(e)[:100]} - supported: PNG, JPG, HEIC, WebP"}
+            content={"error": "invalid image format - supported: PNG, JPG, HEIC, WebP"}
         )
 
     results = decode_qr_codes(img)

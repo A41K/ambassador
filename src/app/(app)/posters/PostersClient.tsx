@@ -1,6 +1,7 @@
 "use client";
 
 import Icon from "@hackclub/icons";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -66,6 +67,19 @@ type VerifyTarget =
   | { kind: "group"; group: ClientPosterGroup };
 
 const POSTER_STYLES: PosterStyle[] = ["color", "bw", "printer_efficient"];
+const SUPPORTED_PROOF_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".heic", ".heif", ".webp"];
+const SUPPORTED_PROOF_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const SUPPORTED_PROOF_IMAGE_FORMATS = "PNG, JPG, HEIC, WebP";
+const PROOF_IMAGE_ACCEPT = [
+  ...SUPPORTED_PROOF_IMAGE_MIME_TYPES,
+  ...SUPPORTED_PROOF_IMAGE_EXTENSIONS,
+].join(",");
 
 function isSafePreviewUrl(value: string) {
   try {
@@ -73,6 +87,16 @@ function isSafePreviewUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function isSupportedProofImage(file: File) {
+  const type = file.type.trim().toLowerCase();
+  if (type && SUPPORTED_PROOF_IMAGE_MIME_TYPES.has(type)) {
+    return true;
+  }
+
+  const name = file.name.trim().toLowerCase();
+  return SUPPORTED_PROOF_IMAGE_EXTENSIONS.some((extension) => name.endsWith(extension));
 }
 
 export function PostersClient({
@@ -543,6 +567,24 @@ function VerifyModal({
       ? target.group.name || t("groups.unnamed")
       : t("poster-card.referral", { code: target.poster.referral_code });
   const safePreviewUrl = previewUrl && isSafePreviewUrl(previewUrl) ? previewUrl : null;
+  const handleSelectedFile = useCallback(
+    (nextFile: File | null) => {
+      if (!nextFile) {
+        setFile(null);
+        return;
+      }
+
+      if (!isSupportedProofImage(nextFile)) {
+        setFile(null);
+        setError(t("errors.invalid-image-format", { formats: SUPPORTED_PROOF_IMAGE_FORMATS }));
+        return;
+      }
+
+      setError(null);
+      setFile(nextFile);
+    },
+    [t],
+  );
 
   const handleSubmit = useCallback(async () => {
     if (geoState.kind !== "ok" || !file) return;
@@ -616,26 +658,32 @@ function VerifyModal({
 
               <div className="space-y-3">
                 {safePreviewUrl ? (
-                  <div className="overflow-hidden rounded-lg border border-white/10">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={safePreviewUrl} alt="" className="h-48 w-full object-cover" />
+                  <div className="relative h-48 overflow-hidden rounded-lg border border-white/10">
+                    <Image
+                      src={safePreviewUrl}
+                      alt=""
+                      fill
+                      unoptimized
+                      sizes="(max-width: 640px) 100vw, 32rem"
+                      className="object-cover"
+                    />
                   </div>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
                   <input
                     ref={cameraInputRef}
                     type="file"
-                    accept="image/*"
+                    accept={PROOF_IMAGE_ACCEPT}
                     capture="environment"
                     className="hidden"
-                    onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                    onChange={(event) => handleSelectedFile(event.target.files?.[0] ?? null)}
                   />
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept={PROOF_IMAGE_ACCEPT}
                     className="hidden"
-                    onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                    onChange={(event) => handleSelectedFile(event.target.files?.[0] ?? null)}
                   />
                   <Button type="button" size="app" onClick={() => cameraInputRef.current?.click()}>
                     <Icon glyph="photo" size={16} />

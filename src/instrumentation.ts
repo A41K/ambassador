@@ -12,6 +12,9 @@ export async function register() {
 
   emitStartupLogs();
 
+  const { ensureSchema } = await import("@/lib/database/ensure-schema");
+  await ensureSchema();
+
   const { startAirtableSyncScheduler } = await import(
     "@/lib/applications/airtable-sync-scheduler"
   );

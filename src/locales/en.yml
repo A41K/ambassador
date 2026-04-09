@@ -156,6 +156,7 @@ posters:
     load-failed: Could not load your posters.
     download-failed: Download failed.
     upload-failed: Submission failed.
+    invalid-image-format: Unsupported image format. Use {formats}.
     geolocation-unavailable: Your browser does not support geolocation.
     geolocation-denied: Precise location access was denied. Please enable it in your browser settings.
 
