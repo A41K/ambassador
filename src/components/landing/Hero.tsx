@@ -70,9 +70,7 @@ export default function Hero() {
         >
           <span className="font-jersey text-3xl uppercase">{t("apply")}</span>
         </Link>
-        <p className="mt-4 text-neutral-600 text-sm">
-          {t("apply-sub", { daysLeft: 14 })}
-        </p>
+        <p className="mt-4 text-neutral-600 text-sm">{t("apply-sub")}</p>
       </div>
       <Image
         src={flagHoldingText}

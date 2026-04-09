@@ -525,7 +525,7 @@ landing:
     title: Ambassador Program
 
   apply: Apply
-  apply-sub: "{daysLeft} days left, US, UK, CA, EU, AU only"
+  apply-sub: "US, UK, CA, EU, AU only"
   log-in: Log in
 
   hero:
