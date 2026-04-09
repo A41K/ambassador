@@ -27,9 +27,6 @@ export default function Footer() {
         >
           <span className="font-jersey text-7xl uppercase">{t("apply")}</span>
         </Link>
-        {/* <p className="mt-6 italic text-neutral-400 text-pretty">
-          {t("footer.cta-sub")}
-        </p> */}
       </div>
       <div className="px-12 pb-6 gap-4 flex items-center">
         <a href="https://hackclub.com" target="_blank" rel="noreferrer">
