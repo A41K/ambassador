@@ -18,9 +18,9 @@ export default function PastEvents() {
   const t = useTranslations("landing.past-events");
 
   return (
-    <div className="p-12">
+    <div className="p-12 max-w-7xl mx-auto">
       <h2 className="text-4xl md:text-5xl font-jersey">{t("title")}</h2>
-      <div className="leading-relaxed text-2xl md:text-3xl text-pretty space-y-4 mt-4">
+      <div className="leading-relaxed text-xl md:text-2xl xl:text-3xl text-pretty space-y-4 mt-4">
         <p>
           {t.rich("0", {
             strong: (chunks) => <strong>{chunks}</strong>,

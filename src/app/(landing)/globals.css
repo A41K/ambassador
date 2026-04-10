@@ -10,7 +10,7 @@
 
 @layer base {
   html {
-    font-size: max(16px, 1.25vw);
+    font-size: clamp(16px, 1.25vw, 20px);
   }
 
   :is(

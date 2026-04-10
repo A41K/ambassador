@@ -9,7 +9,7 @@ export default function Header() {
   const t = useTranslations("landing");
 
   return (
-    <header className="px-12 pt-6 flex items-center">
+    <header className="px-12 mx-auto max-w-7xl pt-6 flex items-center">
       <Image
         src={orphHappy}
         alt=""

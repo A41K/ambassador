@@ -14,7 +14,7 @@ import Link from "next/link";
 export default function Hero() {
   const t = useTranslations("landing");
   return (
-    <div className="p-12 overflow-clip max-lg:pb-0 flex gap-x-8 max-lg:flex-col items-center justify-between">
+    <div className="p-12 max-w-7xl mx-auto overflow-clip max-lg:pb-0 flex gap-x-8 max-lg:flex-col items-center justify-between">
       <div className="max-lg:text-center">
         <div className="max-w-fit max-lg:mx-auto">
           <div className="relative max-w-fit">

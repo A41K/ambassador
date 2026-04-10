@@ -27,8 +27,10 @@ export default function PastProjects() {
   const t = useTranslations("landing.past-projects");
 
   return (
-    <div className="p-12">
-      <h2 className="text-4xl md:text-5xl font-jersey">{t("title")}</h2>
+    <div className="p-12 max-w-7xl mx-auto">
+      <h2 className="text-4xl md:text-5xl text-pretty font-jersey">
+        {t("title")}
+      </h2>
       <div className="mt-8 gap-6 relative text-black grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {projects.map((project) => (
           <div key={project.key} className="relative @container">

@@ -1,5 +1,3 @@
-import Sep from "./Sep";
-
 const questions = [
   {
     question: "What would I do?",
@@ -17,11 +15,12 @@ const questions = [
       <span key="how-0">
         We&rsquo;ve already made some amazing posters for you, so all you have
         to do is print them out from our platform and put them up for people to
-        see! Please remember to follow any local laws about putting up posters
-        - you could look into places like local shops or community boards.
+        see! Please remember to follow any local laws about putting up posters -
+        you could look into places like local shops or community boards.
       </span>,
       <span key="how-1">
-        We&rsquo;re planning to add referral links too, but for now it&rsquo;s posters only.
+        We&rsquo;re planning to add referral links too, but for now it&rsquo;s
+        posters only.
       </span>,
     ],
   },
@@ -30,10 +29,13 @@ const questions = [
     answers: [
       <span key="what-get-0">
         We&rsquo;ll give you $1.00 for every poster you put up (with a photo!),
-        and $0.50 for every person who signs up and verifies themselves as
-        under 18.
+        and $0.50 for every person who signs up and verifies themselves as under
+        18.
       </span>,
-      <span key="what-get-1" className="text-base text-neutral-600">
+      <span
+        key="what-get-1"
+        className="block text-base leading-relaxed text-neutral-600"
+      >
         example: if you put up 15 posters in a month, and 10 people sign up{" "}
         <span className="underline">per poster</span>, that&rsquo;s $15 + $75 =
         $90 for that month!
@@ -62,8 +64,7 @@ const questions = [
 
 export default function Questions() {
   return (
-    <div className="p-12 relative">
-      <Sep className="absolute top-0 -translate-y-1/2 inset-x-0" />
+    <div className="p-12 relative max-w-7xl mx-auto">
       <h2 className="text-4xl md:text-5xl font-jersey">
         Questions you might have
       </h2>
@@ -71,7 +72,7 @@ export default function Questions() {
         {questions.map((item) => (
           <div
             key={item.question}
-            className="py-4 border-b border-neutral-300 leading-relaxed text-xl"
+            className="py-4 border-b border-neutral-300 leading-relaxed text-lg md:text-xl"
           >
             <p className="font-bold">{item.question}</p>
             {item.answers.map((answer, index) => (
@@ -82,7 +83,7 @@ export default function Questions() {
           </div>
         ))}
       </div>
-      <p className="mt-6 text-2xl md:text-3xl leading-relaxed">
+      <p className="mt-6 text-xl md:text-2xl xl:text-3xl leading-relaxed">
         If your question isn&rsquo;t answered here, you can always ask in{" "}
         <strong>#ambassador</strong> or email us,{" "}
         <strong>ambassadors@hackclub.com</strong>.
