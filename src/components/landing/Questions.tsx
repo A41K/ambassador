@@ -41,6 +41,11 @@ const questions = [
         $90 for that month!
       </span>,
       <span key="what-get-2">
+        You&rsquo;ll get a $20 fund for any supplies like paper, printer ink,
+        pins, and blu-tack that you need to put up your posters - this can be
+        topped up if you need more.
+      </span>,
+      <span key="what-get-3">
         We&rsquo;ll also give you Hack Club branded t-shirts and merch.
       </span>,
     ],
