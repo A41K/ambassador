@@ -13,7 +13,7 @@
     font-size: clamp(16px, 1.25vw, 20px);
   }
 
-  :is(
+  /* :is(
     button:not([data-slot^="select-"]),
     [data-slot="button"],
     a[data-slot="button"],
@@ -51,7 +51,7 @@
     ):is(:hover, :focus-visible)
     svg {
     color: #fff !important;
-  }
+  } */
 }
 
 @utility bg-grid {
