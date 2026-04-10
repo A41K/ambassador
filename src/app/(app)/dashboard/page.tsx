@@ -64,6 +64,7 @@ const toneBg: Record<Tone, string> = {
   rejection: "bg-primary",
 };
 
+const APPLY_PATH = "/apply";
 const STEP_ORDER: StepKey[] = ["apply", "verify", "review", "decision"];
 
 type ShirtOrderRow = {
@@ -489,8 +490,9 @@ function NoApplication({ t }: { t: DashboardTranslations }) {
       title={t("dashboard.no-application.title")}
       body={t("dashboard.no-application.body")}
       action={{
-        href: "/form",
+        href: APPLY_PATH,
         label: t("dashboard.no-application.cta"),
+        external: true,
       }}
     />
   );
@@ -564,8 +566,9 @@ function RejectedApplication({ t }: { t: DashboardTranslations }) {
       title={t("dashboard.rejected.title")}
       body={t("dashboard.rejected.body")}
       action={{
-        href: "/form",
+        href: APPLY_PATH,
         label: t("dashboard.rejected.cta"),
+        external: true,
       }}
     />
   );
