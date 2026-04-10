@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import {
   resolveAmbassadorRegion,
   SUPPORTED_AMBASSADOR_REGIONS,
+  type AmbassadorRegion,
 } from "@/lib/settings";
 
 export default function SettingsClient({
@@ -26,7 +27,7 @@ export default function SettingsClient({
   slackName,
   verificationStatus,
   currentRegion,
-  detectedRegion,
+  detectedRegions,
 }: {
   displayName: string;
   email: string;
@@ -35,11 +36,11 @@ export default function SettingsClient({
   slackName: string;
   verificationStatus: string;
   currentRegion: string | null;
-  detectedRegion: string | null;
+  detectedRegions: Array<string | null>;
 }) {
   const t = useTranslations("settings.form");
-  const [region, setRegion] = useState(() =>
-    resolveAmbassadorRegion(currentRegion, detectedRegion),
+  const [region, setRegion] = useState<AmbassadorRegion>(() =>
+    resolveAmbassadorRegion(currentRegion, ...detectedRegions),
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -174,7 +175,7 @@ export default function SettingsClient({
         <label className="mb-2 block font-body text-base tracking-wide text-white">
           {t("labels.region")}
         </label>
-        <Select value={region} onValueChange={setRegion}>
+        <Select value={region} onValueChange={(value) => setRegion(value as AmbassadorRegion)}>
           <SelectTrigger
             className={cn(
               surfaceClass,

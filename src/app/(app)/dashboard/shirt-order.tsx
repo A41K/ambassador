@@ -1,7 +1,7 @@
 "use client";
 
 import Icon from "@hackclub/icons";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -134,11 +134,49 @@ function ShirtOrderBody({
   );
   const [addressIndex, setAddressIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshingAddresses, setRefreshingAddresses] = useState(false);
   const [error, setError] = useState("");
   const [order, setOrder] = useState<ShirtOrderState | null>(existingOrder);
-  const [refreshingAddresses, startRefreshTransition] = useTransition();
   const canPlaceOrder = !order || canPlaceAnotherShirtOrder(order.status);
-  const handleRefreshAddresses = () => startRefreshTransition(() => router.refresh());
+
+  const handleRefreshAddresses = async () => {
+    if (refreshingAddresses) {
+      return;
+    }
+
+    if (needsAddressRefresh) {
+      window.location.assign(refreshAddressesHref);
+      return;
+    }
+
+    setRefreshingAddresses(true);
+
+    try {
+      const res = await fetch("/api/hca/addresses/refresh", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+
+        if (data?.error === "reauth_required") {
+          window.location.assign(refreshAddressesHref);
+          return;
+        }
+
+        window.alert(t("errors.refresh-failed-alert"));
+        return;
+      }
+
+      router.refresh();
+    } catch {
+      window.alert(t("errors.refresh-failed-alert"));
+    } finally {
+      setRefreshingAddresses(false);
+    }
+  };
 
   const surfaceClass = cn(
     "ui-input-surface h-14 w-full !rounded-none [border-radius:0!important] border-0 px-4 text-base focus-visible:ring-1 focus-visible:ring-white/15",
@@ -510,7 +548,7 @@ function RefreshAddressButton({
   onRefresh,
   refreshing,
 }: {
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<void>;
   refreshing: boolean;
 }) {
   return (

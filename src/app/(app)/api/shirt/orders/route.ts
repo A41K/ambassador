@@ -1,7 +1,7 @@
-import { fetchHackClubAddresses } from "@/lib/auth";
 import { isAcceptedApplicationStatus } from "@/lib/applications/status";
 import sql from "@/lib/database/client";
 import { ensureSchema } from "@/lib/database/ensure-schema";
+import { loadUserHackClubAddresses } from "@/lib/hca-addresses";
 import { isSameOriginRequest } from "@/lib/http";
 import { getSession } from "@/lib/session";
 import {
@@ -11,7 +11,6 @@ import {
   SHIRT_SKU_PREFIX,
   shirtSku,
 } from "@/lib/shop";
-import { isCompleteHackClubAddress, type HackClubAddress } from "@/lib/settings";
 
 export async function POST(request: Request) {
   if (!isSameOriginRequest(request)) {
@@ -35,7 +34,7 @@ export async function POST(request: Request) {
   }
 
   const [user] = await sql`
-    SELECT id, shirt_enabled, hca_access_token
+    SELECT id, shirt_enabled, hca_addresses, hca_access_token
     FROM users
     WHERE id = ${session.sub}
   `;
@@ -57,22 +56,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "not_ambassador" }, { status: 403 });
   }
 
-  if (!user.hca_access_token) {
+  const { addresses, needsAddressRefresh } = await loadUserHackClubAddresses({
+    userId: session.sub,
+    storedAddresses: user.hca_addresses ?? [],
+    accessToken: user.hca_access_token ?? null,
+  });
+
+  if (needsAddressRefresh) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
-
-  let addresses: HackClubAddress[] = [];
-  try {
-    addresses = await fetchHackClubAddresses(user.hca_access_token);
-  } catch (error) {
-    console.error("Failed to load live Hack Club Auth addresses for shirt order", {
-      userId: session.sub,
-      error,
-    });
-    return Response.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  addresses = addresses.filter(isCompleteHackClubAddress);
 
   if (addresses.length === 0) {
     return Response.json({ error: "no_address" }, { status: 400 });

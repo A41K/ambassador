@@ -24,8 +24,8 @@ export default async function SettingsPage() {
     SELECT
       display_name, email, hca_first_name, hca_last_name,
       slack_id, slack_name, verification_status,
-      ambassador_region,
-      balance_cents, is_admin, country_name
+      ambassador_region, hca_country, country_name, country_code,
+      balance_cents, is_admin
     FROM users WHERE id = ${session.sub}
   `;
   const canAccessAdmin = Boolean(session.impersonator) || Boolean(user?.is_admin ?? session.isAdmin);
@@ -45,7 +45,11 @@ export default async function SettingsPage() {
           slackName={user?.slack_name ?? ""}
           verificationStatus={user?.verification_status ?? ""}
           currentRegion={user?.ambassador_region ?? null}
-          detectedRegion={user?.country_name ?? null}
+          detectedRegions={[
+            user?.hca_country ?? null,
+            user?.country_name ?? null,
+            user?.country_code ?? null,
+          ]}
         />
       </div>
     </main>

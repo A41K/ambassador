@@ -1,5 +1,6 @@
 import sql from "@/lib/database/client";
 import { requireEnv } from "@/lib/env";
+import { resolveDetectedAmbassadorRegion } from "@/lib/settings";
 
 const PRIVATE_RANGES = [
   /^10\./,
@@ -81,6 +82,8 @@ export async function geocodeIp(
 ) {
   const geo = await fetchGeo(ip);
   if (!geo) return;
+  const ambassadorRegion =
+    resolveDetectedAmbassadorRegion(geo.country_code, geo.country_name) ?? "United States";
 
   if (table === "users" && id) {
     await sql`
@@ -94,6 +97,13 @@ export async function geocodeIp(
         postal_code = ${geo.postal_code ?? null},
         timezone = ${geo.timezone ?? null},
         org = ${geo.org ?? null},
+        ambassador_region = CASE
+          WHEN ambassador_region = 'Other' AND ${ambassadorRegion} <> 'Other'
+            THEN ${ambassadorRegion}
+          WHEN ambassador_region IS NULL
+            THEN ${ambassadorRegion}
+          ELSE ambassador_region
+        END,
         geocoded_at = NOW()
       WHERE id = ${id}
     `;

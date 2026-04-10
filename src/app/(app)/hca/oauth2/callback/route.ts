@@ -16,7 +16,11 @@ import { ensureSchema } from "@/lib/database/ensure-schema";
 import { fetchGeo, geocodeIp, linkAnonymousVisits } from "@/lib/geo";
 import { getRequestIp, getSafeRedirectPath } from "@/lib/http";
 import { createToken, setSession } from "@/lib/session";
-import { normalizeHackClubAddresses, resolveAmbassadorRegion } from "@/lib/settings";
+import {
+  normalizeHackClubAddresses,
+  resolveAmbassadorRegion,
+  resolveDetectedAmbassadorRegion,
+} from "@/lib/settings";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -72,18 +76,26 @@ export async function GET(request: Request) {
   const ip = getRequestIp(request);
   const addressCountry = primaryAddress?.country?.trim() || null;
   const signupGeo = addressCountry ? null : await fetchGeo(ip);
-  const detectedCountry = addressCountry ?? signupGeo?.country_name ?? null;
-  const ambassadorRegion = resolveAmbassadorRegion(null, detectedCountry);
 
   await ensureSchema();
 
-  const existingUsers = await sql<{ id: string }[]>`
-    SELECT id
+  const [existingUser] = await sql<{ id: string; ambassador_region: string | null }[]>`
+    SELECT id, ambassador_region
     FROM users
     WHERE hca_id = ${hcaId}
     LIMIT 1
   `;
-  const wasExistingUser = existingUsers.length > 0;
+  const wasExistingUser = Boolean(existingUser);
+  const detectedAmbassadorRegion =
+    resolveDetectedAmbassadorRegion(
+      addressCountry,
+      signupGeo?.country_code,
+      signupGeo?.country_name,
+    ) ?? "United States";
+  const ambassadorRegion = resolveAmbassadorRegion(
+    existingUser?.ambassador_region ?? null,
+    detectedAmbassadorRegion,
+  );
   const id = crypto.randomUUID();
 
   const [user] = await sql`
@@ -116,7 +128,7 @@ export async function GET(request: Request) {
       ${signupGeo?.city ?? null},
       ${signupGeo?.region ?? null},
       ${signupGeo?.country_code ?? null},
-      ${detectedCountry},
+      ${addressCountry ?? signupGeo?.country_name ?? null},
       ${signupGeo?.postal_code ?? null},
       ${signupGeo?.timezone ?? null},
       ${signupGeo?.org ?? null},
@@ -151,7 +163,13 @@ export async function GET(request: Request) {
       org = COALESCE(EXCLUDED.org, users.org),
       geocoded_at = COALESCE(EXCLUDED.geocoded_at, users.geocoded_at),
       hca_addresses = EXCLUDED.hca_addresses,
-      ambassador_region = COALESCE(users.ambassador_region, EXCLUDED.ambassador_region),
+      ambassador_region = CASE
+        WHEN users.ambassador_region = 'Other' AND EXCLUDED.ambassador_region <> 'Other'
+          THEN EXCLUDED.ambassador_region
+        WHEN users.ambassador_region IS NULL
+          THEN EXCLUDED.ambassador_region
+        ELSE users.ambassador_region
+      END,
       hca_access_token = EXCLUDED.hca_access_token,
       updated_at = NOW()
     RETURNING id, is_admin

@@ -19,7 +19,17 @@ export const SUPPORTED_AMBASSADOR_REGIONS = [
   "Other",
 ] as const;
 
-const EU_COUNTRY_NAMES = new Set([
+export type AmbassadorRegion = (typeof SUPPORTED_AMBASSADOR_REGIONS)[number];
+type AmbassadorRegionInput = string | null | undefined;
+
+const REGION_CODES: Array<readonly [string, AmbassadorRegion]> = [
+  ["au", "Australia"],
+  ["ca", "Canada"],
+  ["gb", "United Kingdom"],
+  ["us", "United States"],
+];
+
+const EU_COUNTRY_NAMES = [
   "austria",
   "belgium",
   "bulgaria",
@@ -47,32 +57,94 @@ const EU_COUNTRY_NAMES = new Set([
   "slovenia",
   "spain",
   "sweden",
-]);
+];
 
-const REGION_ALIASES: Record<
-  string,
-  (typeof SUPPORTED_AMBASSADOR_REGIONS)[number]
-> = {
-  "czech republic": "EU",
-  "europe": "EU",
-  "european union": "EU",
-  "great britain": "United Kingdom",
-  "england": "United Kingdom",
-  "northern ireland": "United Kingdom",
-  "scotland": "United Kingdom",
-  "uk": "United Kingdom",
-  "united kingdom of great britain and northern ireland": "United Kingdom",
-  "u.k.": "United Kingdom",
-  "u.s.": "United States",
-  "u.s.a.": "United States",
-  "usa": "United States",
-  "us": "United States",
-  "united states of america": "United States",
-  "wales": "United Kingdom",
-};
+const EU_COUNTRY_CODES = [
+  "at",
+  "be",
+  "bg",
+  "hr",
+  "cy",
+  "cz",
+  "de",
+  "dk",
+  "ee",
+  "es",
+  "fi",
+  "fr",
+  "gr",
+  "hu",
+  "ie",
+  "it",
+  "lt",
+  "lu",
+  "lv",
+  "mt",
+  "nl",
+  "pl",
+  "pt",
+  "ro",
+  "se",
+  "si",
+  "sk",
+];
+
+const REGION_NAMES: Array<readonly [string, AmbassadorRegion]> = [
+  ["australia", "Australia"],
+  ["canada", "Canada"],
+  ["czech republic", "EU"],
+  ["republic of ireland", "EU"],
+  ["the netherlands", "EU"],
+  ["europe", "EU"],
+  ["european union", "EU"],
+  ["great britain", "United Kingdom"],
+  ["england", "United Kingdom"],
+  ["northern ireland", "United Kingdom"],
+  ["scotland", "United Kingdom"],
+  ["united kingdom", "United Kingdom"],
+  ["united kingdom of great britain and northern ireland", "United Kingdom"],
+  ["wales", "United Kingdom"],
+  ["united states", "United States"],
+  ["united states of america", "United States"],
+];
 
 function normalizeRegionName(value: string) {
   return value.trim().toLowerCase();
+}
+
+function normalizeRegionCandidate(value: string) {
+  return normalizeRegionName(value)
+    .replace(/\./g, "")
+    .replace(/\s+/g, " ");
+}
+
+const REGION_LOOKUP = new Map<string, AmbassadorRegion>([
+  ...SUPPORTED_AMBASSADOR_REGIONS.map((region) => [normalizeRegionCandidate(region), region] as const),
+  ...REGION_CODES.map(([candidate, region]) => [normalizeRegionCandidate(candidate), region] as const),
+  ...REGION_NAMES.map(([candidate, region]) => [normalizeRegionCandidate(candidate), region] as const),
+  ...EU_COUNTRY_NAMES.map((country) => [normalizeRegionCandidate(country), "EU"] as const),
+  ...EU_COUNTRY_CODES.map((countryCode) => [normalizeRegionCandidate(countryCode), "EU"] as const),
+]);
+
+export function resolveDetectedAmbassadorRegion(
+  ...detectedRegions: AmbassadorRegionInput[]
+): AmbassadorRegion | null {
+  let sawCandidate = false;
+
+  for (const detectedRegion of detectedRegions) {
+    if (!detectedRegion || !detectedRegion.trim()) {
+      continue;
+    }
+
+    sawCandidate = true;
+    const normalizedDetectedRegion = normalizeRegionCandidate(detectedRegion);
+    const matchedRegion = REGION_LOOKUP.get(normalizedDetectedRegion);
+    if (matchedRegion) {
+      return matchedRegion;
+    }
+  }
+
+  return sawCandidate ? "Other" : null;
 }
 
 function isHackClubAddress(value: unknown): value is Record<string, unknown> {
@@ -200,37 +272,25 @@ export function formatHackClubAddress(address: unknown) {
 
 export function resolveAmbassadorRegion(
   currentRegion: string | null,
-  detectedRegion: string | null,
+  ...detectedRegions: AmbassadorRegionInput[]
 ) {
-  if (
-    currentRegion &&
-    SUPPORTED_AMBASSADOR_REGIONS.includes(
-      currentRegion as (typeof SUPPORTED_AMBASSADOR_REGIONS)[number],
-    )
-  ) {
-    return currentRegion;
+  const resolvedCurrentRegion = resolveDetectedAmbassadorRegion(currentRegion);
+  const resolvedDetectedRegion = resolveDetectedAmbassadorRegion(...detectedRegions);
+
+  if (resolvedCurrentRegion) {
+    if (
+      resolvedCurrentRegion === "Other" &&
+      resolvedDetectedRegion &&
+      resolvedDetectedRegion !== "Other"
+    ) {
+      return resolvedDetectedRegion;
+    }
+
+    return resolvedCurrentRegion;
   }
 
-  if (detectedRegion) {
-    const normalizedDetectedRegion = normalizeRegionName(detectedRegion);
-    const matchedRegion = SUPPORTED_AMBASSADOR_REGIONS.find(
-      (region) => normalizeRegionName(region) === normalizedDetectedRegion,
-    );
-
-    if (matchedRegion) {
-      return matchedRegion;
-    }
-
-    const aliasedRegion = REGION_ALIASES[normalizedDetectedRegion];
-    if (aliasedRegion) {
-      return aliasedRegion;
-    }
-
-    if (EU_COUNTRY_NAMES.has(normalizedDetectedRegion)) {
-      return "EU";
-    }
-
-    return "Other";
+  if (resolvedDetectedRegion) {
+    return resolvedDetectedRegion;
   }
 
   return "United States";

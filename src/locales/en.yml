@@ -199,6 +199,7 @@ shirt:
     generic: Something went wrong.
     not-ambassador: Only approved ambassadors can order a shirt.
     refresh-addresses: Refresh with Hack Club Auth, then try again.
+    refresh-failed-alert: Could not refresh your shipping addresses from Hack Club Auth. Try again.
     unavailable: Shirt ordering is not enabled for this account.
     no-address: You need a shipping address on Hack Club Auth first.
     already-ordered: You've already ordered an ambassador shirt.

@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { useId, type ComponentProps, type ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 
-import { fetchHackClubAddresses } from "@/lib/auth";
 import { DevAdminSelector } from "@/components/dev-admin-selector";
 import { Navbar } from "@/components/navbar";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,9 +18,9 @@ import {
 import sql from "@/lib/database/client";
 import { canShowDevAdminSelector, isDevState, type DevState } from "@/lib/dev-admin-selector";
 import { ensureSchema } from "@/lib/database/ensure-schema";
+import { loadUserHackClubAddresses } from "@/lib/hca-addresses";
 import { getSession } from "@/lib/session";
 import {
-  isCompleteHackClubAddress,
   resolveAmbassadorRegion,
   type HackClubAddress,
 } from "@/lib/settings";
@@ -87,8 +86,11 @@ type UserRow = {
   balance_cents: number | null;
   is_admin: boolean | null;
   ambassador_region: string | null;
+  hca_country: string | null;
   country_name: string | null;
+  country_code: string | null;
   shirt_enabled: boolean | null;
+  hca_addresses: unknown;
   hca_access_token: string | null;
   manual_dashboard_state: string | null;
 };
@@ -118,8 +120,8 @@ export default async function DashboardPage({
       ORDER BY created_at DESC LIMIT 1
     `,
     sql<UserRow[]>`
-      SELECT balance_cents, is_admin, ambassador_region, country_name,
-             shirt_enabled, hca_access_token, manual_dashboard_state
+      SELECT balance_cents, is_admin, ambassador_region, hca_country, country_name, country_code,
+             shirt_enabled, hca_addresses, hca_access_token, manual_dashboard_state
       FROM users WHERE id = ${session.sub}
     `,
     sql<ShirtOrderRow[]>`
@@ -138,21 +140,14 @@ export default async function DashboardPage({
   let shirtAddresses: HackClubAddress[] = [];
 
   if (shouldLoadShirtAddresses) {
-    const hcaAccessToken = user?.hca_access_token;
+    const addressState = await loadUserHackClubAddresses({
+      userId: session.sub,
+      storedAddresses: user?.hca_addresses ?? [],
+      accessToken: user?.hca_access_token ?? null,
+    });
 
-    if (!hcaAccessToken) {
-      shirtNeedsAddressRefresh = true;
-    } else {
-      shirtAddresses = await fetchHackClubAddresses(hcaAccessToken).catch((error) => {
-        console.error("Failed to load live Hack Club Auth addresses", {
-          userId: session.sub,
-          error,
-        });
-        shirtNeedsAddressRefresh = true;
-        return [];
-      });
-      shirtAddresses = shirtAddresses.filter(isCompleteHackClubAddress);
-    }
+    shirtAddresses = addressState.addresses;
+    shirtNeedsAddressRefresh = addressState.needsAddressRefresh;
   }
   const warehouseOrder = existingOrderRow
     ? parseWarehouseOrderResponse(existingOrderRow.warehouse_payload)
@@ -234,7 +229,9 @@ function resolveState({
   user:
     | {
         ambassador_region?: string | null;
+        hca_country?: string | null;
         country_name?: string | null;
+        country_code?: string | null;
         manual_dashboard_state?: string | null;
       }
     | undefined;
@@ -303,7 +300,9 @@ function resolveState({
 
   const resolvedRegion = resolveAmbassadorRegion(
     user?.ambassador_region ?? null,
+    user?.hca_country ?? null,
     user?.country_name ?? null,
+    user?.country_code ?? null,
   );
   const manualDashboardStateValue = user?.manual_dashboard_state ?? null;
   const manualDashboardState = isUserManualDashboardState(manualDashboardStateValue)
