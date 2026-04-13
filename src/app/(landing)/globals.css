@@ -61,7 +61,10 @@
 }
 
 @utility bg-noise {
-  background-image: url("/bg-noise.png");
+  background-image: image-set(
+    url("/bg-noise.avif") type("image/avif"),
+    url("/bg-noise.png") type("image/png")
+  );
   background-repeat: repeat;
 }
 

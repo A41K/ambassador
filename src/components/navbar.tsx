@@ -34,7 +34,7 @@ export async function Navbar({
       <div className="mx-auto flex max-w-5xl items-center justify-between">
         <a href="/dashboard" className="flex items-center gap-3">
           <Image
-            src="/dashboard-logo.png"
+            src="/dashboard-logo.avif"
             alt={t("app.navbar.logo-alt")}
             width={787}
             height={798}
