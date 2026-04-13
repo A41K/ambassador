@@ -8,10 +8,30 @@ import orphWowCute from "@/assets/landing/emotes/orph-wowcute.png";
 import { useTranslations } from "next-intl";
 
 const events = [
-  { key: "flagship", image: campfireFlagship, decoration: false },
-  { key: "midnight", image: midnight, decoration: true },
-  { key: "blueprint", image: blueprint, decoration: false },
-  { key: "siege", image: siege, decoration: false },
+  {
+    key: "flagship",
+    image: campfireFlagship,
+    decoration: false,
+    href: "https://flagship.hackclub.com/",
+  },
+  {
+    key: "midnight",
+    image: midnight,
+    decoration: true,
+    href: "https://midnight.hackclub.com/",
+  },
+  {
+    key: "blueprint",
+    image: blueprint,
+    decoration: false,
+    href: "https://blueprint.hackclub.com/",
+  },
+  {
+    key: "siege",
+    image: siege,
+    decoration: false,
+    href: "https://siege.hackclub.com/",
+  },
 ] as const;
 
 export default function PastEvents() {
@@ -32,14 +52,19 @@ export default function PastEvents() {
           })}
         </p>
       </div>
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-12">
+      <div className="mt-8 group grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-12">
         {events.map((event) => (
-          <section key={event.key}>
-            <div className={event.decoration ? "relative" : undefined}>
+          <a
+            key={event.key}
+            href={event.href}
+            target="_blank"
+            className="block group/link group-has-hover:opacity-50 group-has-focus:opacity-50 hover:opacity-100 focus:opacity-100 transition-opacity"
+          >
+            <div className="relative">
               <Image
                 src={event.image}
                 alt=""
-                className="w-full aspect-3/2 object-cover border-[0.75rem] border-white shadow-lg"
+                className="w-full aspect-3/2 object-cover border-[0.75rem] border-white shadow-lg transition-transform group-hover/link:scale-102 group-hover/link:rotate-2 group-focus/link:scale-102 group-focus/link:rotate-2"
                 placeholder="blur"
                 sizes="(max-width: 1024px) calc(100vw - 6rem), 36rem"
               />
@@ -56,7 +81,7 @@ export default function PastEvents() {
             </div>
             <p className="mt-6 text-xl font-bold">{t(`${event.key}.title`)}</p>
             <p className="mt-1 text-xl">{t(`${event.key}.desc`)}</p>
-          </section>
+          </a>
         ))}
       </div>
     </div>
