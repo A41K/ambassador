@@ -69,9 +69,13 @@ function getAirtableApplicationsClient() {
   if (!token) return null;
 
   return new AirtableClient({
-    baseId: process.env.AIRTABLE_BASE_ID?.trim() || DEFAULT_AIRTABLE_BASE_ID,
+    baseId: getAirtableBaseId(),
     token,
   });
+}
+
+export function getAirtableBaseId() {
+  return process.env.AIRTABLE_BASE_ID?.trim() || DEFAULT_AIRTABLE_BASE_ID;
 }
 
 export function getAirtableApplicationsTableId() {

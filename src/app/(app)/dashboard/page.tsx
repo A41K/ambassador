@@ -8,6 +8,7 @@ import { DevAdminSelector } from "@/components/dev-admin-selector";
 import { Navbar } from "@/components/navbar";
 import { buttonVariants } from "@/components/ui/button";
 import { getTranslatedPageMetadata } from "@/i18n/metadata";
+import { getAmbassadorOnboardingStatus } from "@/lib/ambassadors/airtable";
 import {
   APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS,
   isAcceptedApplicationStatus,
@@ -39,6 +40,8 @@ import ShirtOrderSection, {
   type ShirtOrderSectionProps,
   type ShirtOrderState,
 } from "./shirt-order";
+
+const AMBASSADOR_ONBOARDING_FORM_URL = "https://forms.hackclub.com/t/mJvXsYY41Lus";
 
 type DashboardTranslations = (key: string, values?: Record<string, number | string>) => string;
 type IconGlyph = NonNullable<ComponentProps<typeof Icon>["glyph"]>;
@@ -82,6 +85,8 @@ type ApplicationRow = {
   status: string;
   name: string;
   created_at: string;
+  airtable_record_id: string | null;
+  airtable_payload: unknown;
 };
 
 type UserRow = {
@@ -116,7 +121,7 @@ export default async function DashboardPage({
 
   const [[application], [user], [existingOrderRow]] = await Promise.all([
     sql<ApplicationRow[]>`
-      SELECT id, status, name, created_at
+      SELECT id, status, name, created_at, airtable_record_id, airtable_payload
       FROM applications WHERE user_id = ${session.sub}
       ORDER BY created_at DESC LIMIT 1
     `,
@@ -138,7 +143,17 @@ export default async function DashboardPage({
     latestApplicationStatus: application?.status ?? null,
     manualDashboardState: user?.manual_dashboard_state ?? null,
   });
-  const shouldLoadShirtAddresses = canUseShirts;
+  const shirtOnboardingStatus = canUseShirts
+    ? await getAmbassadorOnboardingStatus({
+        applicationAirtableRecordId: application?.airtable_record_id ?? null,
+        applicationAirtablePayload: application?.airtable_payload ?? null,
+      })
+    : { hasAmbassadorRecord: false, onboardingComplete: false };
+  const shirtRequiresOnboarding =
+    canUseShirts &&
+    (!shirtOnboardingStatus.hasAmbassadorRecord ||
+      !shirtOnboardingStatus.onboardingComplete);
+  const shouldLoadShirtAddresses = canUseShirts && !shirtRequiresOnboarding;
   let shirtNeedsAddressRefresh = false;
   let shirtAddresses: HackClubAddress[] = [];
 
@@ -173,6 +188,8 @@ export default async function DashboardPage({
     addresses: shirtAddresses,
     needsAddressRefresh: shirtNeedsAddressRefresh,
     existingOrder: shirtExistingOrder,
+    requiresOnboarding: shirtRequiresOnboarding,
+    onboardingFormUrl: AMBASSADOR_ONBOARDING_FORM_URL,
   };
 
   const canAccessAdmin = Boolean(session.impersonator) || Boolean(user?.is_admin ?? session.isAdmin);

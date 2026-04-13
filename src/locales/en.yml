@@ -169,6 +169,8 @@ shirt:
     body: Refresh with Hack Club Auth to load your latest shipping addresses.
     cta: Refresh addresses
   manage-addresses: Manage addresses on Hack Club Auth
+  onboarding:
+    body: Complete the <link>ambassador onboarding</link> before ordering your shirt.
   labels:
     size: Size (US Sizing)
     shipping-address: Shipping address
@@ -198,6 +200,7 @@ shirt:
   errors:
     generic: Something went wrong.
     not-ambassador: Only approved ambassadors can order a shirt.
+    onboarding-incomplete: Complete the ambassador onboarding form before ordering your shirt.
     refresh-addresses: Refresh with Hack Club Auth, then try again.
     refresh-failed-alert: Could not refresh your shipping addresses from Hack Club Auth. Try again.
     unavailable: Shirt ordering is not enabled for this account.

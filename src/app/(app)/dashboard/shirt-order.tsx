@@ -40,12 +40,16 @@ export type ShirtOrderSectionProps = {
   addresses: HackClubAddress[];
   needsAddressRefresh: boolean;
   existingOrder: ShirtOrderState | null;
+  requiresOnboarding: boolean;
+  onboardingFormUrl: string;
 };
 
 export default function ShirtOrderSection(props: ShirtOrderSectionProps) {
   const t = useTranslations("shirt");
   const retryableReason =
-    props.existingOrder && canPlaceAnotherShirtOrder(props.existingOrder.status)
+    props.existingOrder &&
+    !props.requiresOnboarding &&
+    canPlaceAnotherShirtOrder(props.existingOrder.status)
       ? props.existingOrder.note?.trim() || t("order.no-reason")
       : null;
   const retryableWarning = retryableReason
@@ -119,12 +123,14 @@ function ShirtOrderBody({
   addresses,
   needsAddressRefresh,
   existingOrder,
+  requiresOnboarding,
+  onboardingFormUrl,
 }: ShirtOrderSectionProps) {
   const t = useTranslations("shirt");
   const router = useRouter();
   const refreshAddressesHref = "/api/auth/refresh?next=%2Fdashboard";
   useAddressRefreshRedirect(needsAddressRefresh);
-  useAddressReturnRefresh(addresses.length === 0 && !existingOrder);
+  useAddressReturnRefresh(addresses.length === 0 && !existingOrder && !requiresOnboarding);
   const [size, setSize] = useState<ShirtSize>(
     existingOrder?.size && SHIRT_SIZES.includes(existingOrder.size as ShirtSize)
       ? (existingOrder.size as ShirtSize)
@@ -187,28 +193,6 @@ function ShirtOrderBody({
   const selectContentClass =
     "!rounded-none [border-radius:0!important] border-white/10 bg-black text-white !duration-0 !data-open:animate-none !data-closed:animate-none !data-[side=bottom]:translate-y-0 !data-[side=top]:translate-y-0 !data-[side=left]:translate-x-0 !data-[side=right]:translate-x-0";
 
-  if (needsAddressRefresh && !order) {
-    return (
-      <div className="mt-5 space-y-3">
-        <p className="font-body text-base text-white">{t("refresh-addresses.body")}</p>
-        <a href={refreshAddressesHref} className={buttonVariants({ size: "app" })}>
-          {t("refresh-addresses.cta")}
-        </a>
-      </div>
-    );
-  }
-
-  if (addresses.length === 0 && !order) {
-    return (
-      <div className="mt-5">
-        <NoAddressMessage
-          onRefresh={handleRefreshAddresses}
-          refreshing={refreshingAddresses}
-        />
-      </div>
-    );
-  }
-
   const handleSubmit = async () => {
     setSubmitting(true);
     setError("");
@@ -237,6 +221,8 @@ function ShirtOrderBody({
             ? t("errors.no-address")
             : data?.error === "not_ambassador"
               ? t("errors.not-ambassador")
+              : data?.error === "onboarding_incomplete"
+                ? t("errors.onboarding-incomplete")
               : data?.error === "unauthorized"
                 ? t("errors.refresh-addresses")
                 : data?.error === "already_ordered"
@@ -257,6 +243,47 @@ function ShirtOrderBody({
     return (
       <div className="mt-5">
         <LatestOrderCard order={order} />
+      </div>
+    );
+  }
+
+  if (requiresOnboarding) {
+    return (
+      <p className="mt-5 font-body text-base text-white">
+        {t.rich("onboarding.body", {
+          link: (chunks) => (
+            <a
+              href={onboardingFormUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="!text-primary !underline hover:!opacity-80"
+            >
+              {chunks}
+            </a>
+          ),
+        })}
+      </p>
+    );
+  }
+
+  if (needsAddressRefresh && !order) {
+    return (
+      <div className="mt-5 space-y-3">
+        <p className="font-body text-base text-white">{t("refresh-addresses.body")}</p>
+        <a href={refreshAddressesHref} className={buttonVariants({ size: "app" })}>
+          {t("refresh-addresses.cta")}
+        </a>
+      </div>
+    );
+  }
+
+  if (addresses.length === 0 && !order) {
+    return (
+      <div className="mt-5">
+        <NoAddressMessage
+          onRefresh={handleRefreshAddresses}
+          refreshing={refreshingAddresses}
+        />
       </div>
     );
   }

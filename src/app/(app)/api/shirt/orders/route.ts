@@ -1,4 +1,5 @@
 import sql from "@/lib/database/client";
+import { getAmbassadorOnboardingStatus } from "@/lib/ambassadors/airtable";
 import { ensureSchema } from "@/lib/database/ensure-schema";
 import { loadUserHackClubAddresses } from "@/lib/hca-addresses";
 import { isSameOriginRequest } from "@/lib/http";
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   }
 
   const [latestApp] = await sql`
-    SELECT status
+    SELECT status, airtable_record_id, airtable_payload
     FROM applications
     WHERE user_id = ${session.sub}
     ORDER BY created_at DESC, id DESC
@@ -55,6 +56,15 @@ export async function POST(request: Request) {
     manualDashboardState: user.manual_dashboard_state ?? null,
   })) {
     return Response.json({ error: "not_ambassador" }, { status: 403 });
+  }
+
+  const onboardingStatus = await getAmbassadorOnboardingStatus({
+    applicationAirtableRecordId: latestApp?.airtable_record_id ?? null,
+    applicationAirtablePayload: latestApp?.airtable_payload ?? null,
+  });
+
+  if (!onboardingStatus.hasAmbassadorRecord || !onboardingStatus.onboardingComplete) {
+    return Response.json({ error: "onboarding_incomplete" }, { status: 403 });
   }
 
   const { addresses, needsAddressRefresh } = await loadUserHackClubAddresses({
