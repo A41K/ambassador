@@ -5,7 +5,7 @@ locale:
 app:
   metadata:
     title: Stardance Ambassador
-    description: Hack Club Ambassador program
+    description: Build and lead the Hack Club community in your city. Host local events, bring hackers together, and inspire more teens to code.
   login:
     metadata:
       title: Login
