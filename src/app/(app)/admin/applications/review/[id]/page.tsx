@@ -12,6 +12,8 @@ import {
   APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS,
   APPLICATION_STATUS_PENDING_REVIEW,
   APPLICATION_STATUS_REJECTED,
+  getApplicationStatusMeta,
+  normalizeApplicationStatus,
 } from "@/lib/applications/status";
 import sql from "@/lib/database/client";
 import { ensureSchema } from "@/lib/database/ensure-schema";
@@ -55,7 +57,29 @@ type SameCityRow = {
   name: string | null;
   status: string;
   user_name: string | null;
+  slack_name: string | null;
 };
+
+function dedupeRepeatedLastName(value: string | null | undefined) {
+  const trimmedValue = value?.trim() ?? "";
+
+  if (trimmedValue === "") {
+    return null;
+  }
+
+  const parts = trimmedValue.split(/\s+/);
+
+  if (parts.length >= 3) {
+    const lastPart = parts.at(-1)?.toLocaleLowerCase();
+    const previousPart = parts.at(-2)?.toLocaleLowerCase();
+
+    if (lastPart !== undefined && lastPart === previousPart) {
+      return parts.slice(0, -1).join(" ");
+    }
+  }
+
+  return trimmedValue;
+}
 
 export async function generateMetadata(): Promise<Metadata> {
   return getTranslatedPageMetadata("admin.application-detail.page-title");
@@ -105,7 +129,7 @@ export default async function ReviewModePage({
   // Find other applications from same city
   const sameCityApplications = resolvedCity
     ? await sql<SameCityRow[]>`
-        SELECT a.id, a.name, a.status, u.display_name AS user_name
+        SELECT a.id, a.name, a.status, u.display_name AS user_name, u.slack_name
         FROM applications a
         LEFT JOIN users u ON u.id = a.user_id
         LEFT JOIN LATERAL (
@@ -152,9 +176,13 @@ export default async function ReviewModePage({
         `
       : [];
 
-  const displayName = application.user_name ?? application.name ?? "Unknown";
+  const displayName =
+    dedupeRepeatedLastName(application.user_name) ??
+    dedupeRepeatedLastName(application.name) ??
+    "Unknown";
   const slackId = application.user_slack_id ?? application.applicant_slack_id;
   const slackName = application.user_slack_name;
+  const applicationStatusMeta = getApplicationStatusMeta(t);
   const age = application.date_of_birth
     ? Math.floor(
         (Date.now() - new Date(application.date_of_birth).getTime()) /
@@ -170,6 +198,21 @@ export default async function ReviewModePage({
     application.status === APPLICATION_STATUS_PENDING_AUTOMATIC_CHECKS ||
     application.status === APPLICATION_STATUS_ACCEPTED;
 
+  const getRelatedApplicationLabel = (entry: SameCityRow) =>
+    entry.slack_name?.trim()
+      ? `@${entry.slack_name.trim()}`
+      : dedupeRepeatedLastName(entry.user_name) ??
+        dedupeRepeatedLastName(entry.name) ??
+        "Unknown";
+
+  const getRelatedApplicationStatusLabel = (status: string) => {
+    const normalizedStatus = normalizeApplicationStatus(status);
+
+    return normalizedStatus
+      ? applicationStatusMeta[normalizedStatus].label
+      : status;
+  };
+
   return (
     <ReviewModeClient applicationId={application.id}>
       <div className="space-y-6">
@@ -183,10 +226,11 @@ export default async function ReviewModePage({
                   {i > 0 && ", "}
                   <Link
                     href={`/admin/applications/${a.id}`}
-                    className="text-[var(--acceptance)] underline hover:opacity-80"
+                    className="text-[var(--acceptance)] no-underline underline-offset-2 hover:underline hover:opacity-80 focus-visible:underline"
                   >
-                    {a.user_name ?? a.name ?? "Unknown"}
-                  </Link>
+                    {getRelatedApplicationLabel(a)}
+                  </Link>{" "}
+                  ({getRelatedApplicationStatusLabel(a.status)})
                 </span>
               ))}
             </p>
@@ -195,16 +239,27 @@ export default async function ReviewModePage({
 
         {/* Warning banner: pending/rejected from same city */}
         {pendingOrRejectedSameCity.length > 0 && (
-          <div className="border border-[var(--secondary)]/40 bg-[var(--secondary)]/10 p-4">
+          <div className="border border-[var(--primary)]/40 bg-[var(--primary)]/10 p-4">
             <p className="font-body text-sm text-white">
-              <span className="font-bold text-[var(--secondary)]">Other applications from {resolvedCity}:</span>{" "}
-              {pendingOrRejectedSameCity.length} other application{pendingOrRejectedSameCity.length !== 1 ? "s" : ""} ({pendingOrRejectedSameCity.map((a) => a.status).filter((v, i, arr) => arr.indexOf(v) === i).join(", ")})
+              <span className="font-bold text-[var(--primary)]">Other applications from {resolvedCity}:</span>{" "}
+              {pendingOrRejectedSameCity.map((a, i) => (
+                <span key={a.id}>
+                  {i > 0 && ", "}
+                  <Link
+                    href={`/admin/applications/${a.id}`}
+                    className="text-[var(--primary)] no-underline underline-offset-2 hover:underline hover:opacity-80 focus-visible:underline"
+                  >
+                    {getRelatedApplicationLabel(a)}
+                  </Link>{" "}
+                  ({getRelatedApplicationStatusLabel(a.status)})
+                </span>
+              ))}
             </p>
           </div>
         )}
 
         {/* Header */}
-        <header className="grid gap-x-4 gap-y-2 md:grid-cols-[auto_minmax(0,1fr)_auto] md:grid-rows-[minmax(3.5rem,auto)_auto] md:items-start">
+        <header className="grid gap-x-4 gap-y-1 md:grid-cols-[auto_minmax(0,1fr)_auto] md:grid-rows-[minmax(3rem,auto)_auto] md:items-start">
           <div className="md:row-span-2">
             <SlackAvatar
               slackId={slackId}
@@ -213,10 +268,10 @@ export default async function ReviewModePage({
               textClassName="text-lg"
             />
           </div>
-          <div className="min-w-0 flex min-h-14 items-center md:col-start-2 md:row-start-1">
+          <div className="min-w-0 flex min-h-12 items-center md:col-start-2 md:row-start-1">
             <h1 className="truncate text-3xl text-white">{displayName}</h1>
           </div>
-          <div className="flex min-h-14 items-center justify-start md:col-start-3 md:row-start-1 md:justify-end">
+          <div className="flex min-h-12 items-center justify-start md:col-start-3 md:row-start-1 md:justify-end">
             <Link
               href={`/admin/applications/${application.id}`}
               className="ui-open-link inline-flex items-center gap-1 whitespace-nowrap font-body text-lg leading-none"

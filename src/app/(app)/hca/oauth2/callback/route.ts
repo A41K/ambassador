@@ -24,6 +24,46 @@ import {
   resolveDetectedAmbassadorRegion,
 } from "@/lib/settings";
 
+function buildDisplayName(identity: {
+  first_name?: string;
+  last_name?: string;
+  slack_name?: string;
+  slack_display_name?: string;
+}) {
+  const firstName = identity.first_name?.trim() ?? "";
+  const lastName = identity.last_name?.trim() ?? "";
+  const slackDisplayName = identity.slack_display_name?.trim() ?? "";
+  const slackName = identity.slack_name?.trim() ?? "";
+
+  if (slackDisplayName !== "") {
+    return slackDisplayName;
+  }
+
+  if (firstName !== "" && lastName !== "") {
+    const normalizedFirstName = firstName.toLocaleLowerCase();
+    const normalizedLastName = lastName.toLocaleLowerCase();
+
+    if (
+      normalizedFirstName === normalizedLastName ||
+      normalizedFirstName.endsWith(` ${normalizedLastName}`)
+    ) {
+      return firstName;
+    }
+
+    return `${firstName} ${lastName}`;
+  }
+
+  if (firstName !== "" || lastName !== "") {
+    return firstName || lastName;
+  }
+
+  if (slackName !== "") {
+    return slackName;
+  }
+
+  return "Hacker";
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const state = url.searchParams.get("state");
@@ -58,10 +98,7 @@ export async function GET(request: Request) {
   const tokenData = await exchangeCodeForToken(code);
   const userInfo = await fetchUserInfo(tokenData.access_token);
 
-  const displayName =
-    [userInfo.identity.first_name, userInfo.identity.last_name]
-      .filter(Boolean)
-      .join(" ") || "Hacker";
+  const displayName = buildDisplayName(userInfo.identity);
 
   const hcaId = userInfo.identity.id;
   const email = userInfo.identity.primary_email;
