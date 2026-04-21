@@ -1,6 +1,5 @@
 "use client";
 
-import Icon from "@hackclub/icons";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -117,6 +116,7 @@ export function PostersClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifyTarget, setVerifyTarget] = useState<VerifyTarget | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const campaign = useMemo(
     () => campaigns.find((c) => c.slug === campaignSlug) ?? null,
@@ -188,32 +188,128 @@ export function PostersClient({
     await refresh();
   }, [refresh]);
 
+  const allPosters = [
+    ...data.standalonePosters,
+    ...data.groups.flatMap((g) => g.posters),
+  ];
+  const pendingPosters = allPosters.filter((p) => p.verification_status === "pending");
+  const verifiedCount = allPosters.filter((p) => p.verification_status === "success").length;
+  const totalPosters = allPosters.length;
+
   return (
-    <div className="flex flex-col gap-10">
+    <div className="space-y-10">
       {error !== null ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
 
-      <CreateSection
-        campaigns={campaigns}
-        campaignSlug={campaignSlug}
-        setCampaignSlug={setCampaignSlug}
-        availableStyles={availableStyles}
-        posterType={posterType}
-        setPosterType={setPosterType}
-        groupName={groupName}
-        setGroupName={setGroupName}
-        groupSize={groupSize}
-        setGroupSize={setGroupSize}
-        busy={busy}
-        createPoster={createPoster}
-        createGroup={createGroup}
-      />
+      {/* Scan action */}
+      {pendingPosters.length > 0 ? (
+        <section>
+          <p className="text-base leading-relaxed text-muted-foreground">
+            You have {pendingPosters.length} poster{pendingPosters.length !== 1 ? "s" : ""} waiting to be verified.
+            Put them up somewhere, then scan.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {data.groups.some((g) => g.posters.some((p) => p.verification_status === "pending")) && (
+              <Button
+                size="app"
+                onClick={() => {
+                  const group = data.groups.find((g) => g.posters.some((p) => p.verification_status === "pending"));
+                  if (group) setVerifyTarget({ kind: "group", group });
+                }}
+              >
+                Scan group →
+              </Button>
+            )}
+            {data.standalonePosters.some((p) => p.verification_status === "pending") && (
+              <Button
+                size="app"
+                onClick={() => {
+                  const poster = data.standalonePosters.find((p) => p.verification_status === "pending");
+                  if (poster) setVerifyTarget({ kind: "poster", poster });
+                }}
+              >
+                Scan poster →
+              </Button>
+            )}
+          </div>
+        </section>
+      ) : totalPosters > 0 ? (
+        <section>
+          <p className="text-base text-acceptance">All {totalPosters} poster{totalPosters !== 1 ? "s" : ""} verified ✓</p>
+        </section>
+      ) : null}
 
-      <GroupsSection groups={data.groups} onVerifyGroup={(group) => setVerifyTarget({ kind: "group", group })} />
+      {/* Stats */}
+      {totalPosters > 0 && (
+        <section className="flex flex-wrap items-center gap-6">
+          <Stat value={totalPosters} label="total" />
+          <Stat value={verifiedCount} label="verified" tone="acceptance" />
+          <Stat value={pendingPosters.length} label="pending" tone="accent" />
+        </section>
+      )}
 
-      <StandaloneSection
-        posters={data.standalonePosters}
-        onVerifyPoster={(poster) => setVerifyTarget({ kind: "poster", poster })}
-      />
+      {/* Groups */}
+      {data.groups.length > 0 && (
+        <section>
+          <h2 className="font-sub text-2xl text-white">{t("groups.title")}</h2>
+          <div className="mt-4 space-y-4">
+            {data.groups.map((group) => (
+              <GroupCard
+                key={group.id}
+                group={group}
+                onVerify={() => setVerifyTarget({ kind: "group", group })}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Standalone */}
+      {data.standalonePosters.length > 0 && (
+        <section>
+          <h2 className="font-sub text-2xl text-white">{t("singles.title")}</h2>
+          <ul className="mt-4 space-y-2">
+            {data.standalonePosters.map((poster) => (
+              <PosterRow
+                key={poster.id}
+                poster={poster}
+                onVerify={() => setVerifyTarget({ kind: "poster", poster })}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Create */}
+      <section>
+        <button
+          type="button"
+          onClick={() => setShowCreate(!showCreate)}
+          className="flex items-center gap-2 text-left"
+        >
+          <span className="font-sub text-2xl text-white">+ New posters</span>
+          <span className={cn("text-muted-foreground transition-transform", showCreate && "rotate-180")}>↓</span>
+        </button>
+
+        {showCreate && (
+          <div className="mt-5">
+            <CreateSection
+              campaigns={campaigns}
+              campaignSlug={campaignSlug}
+              setCampaignSlug={setCampaignSlug}
+              availableStyles={availableStyles}
+              posterType={posterType}
+              setPosterType={setPosterType}
+              groupName={groupName}
+              setGroupName={setGroupName}
+              groupSize={groupSize}
+              setGroupSize={setGroupSize}
+              busy={busy}
+              createPoster={createPoster}
+              createGroup={createGroup}
+            />
+          </div>
+        )}
+      </section>
 
       {verifyTarget ? (
         <VerifyModal
@@ -226,14 +322,133 @@ export function PostersClient({
   );
 }
 
+function Stat({ value, label, tone }: { value: number; label: string; tone?: "acceptance" | "accent" }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={cn("text-2xl leading-none", tone ? `text-${tone}` : "text-white")}>{value}</span>
+      <span className="font-body text-base leading-none text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
 function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm text-primary">
+    <div className="flex items-center justify-between text-sm text-primary">
       <span>{message}</span>
-      <button type="button" onClick={onDismiss} className="text-primary/80 hover:text-primary">
-        <Icon glyph="view-close" size={16} />
+      <button type="button" onClick={onDismiss} className="ml-3 text-primary/80 hover:text-primary">
+        ✕
       </button>
     </div>
+  );
+}
+
+function GroupCard({
+  group,
+  onVerify,
+}: {
+  group: ClientPosterGroup;
+  onVerify: () => void;
+}) {
+  const t = useTranslations("posters");
+  const pendingCount = group.posters.filter((p) => p.verification_status === "pending").length;
+  const verifiedCount = group.posters.filter((p) => p.verification_status === "success").length;
+
+  return (
+    <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="font-body text-base text-white">
+            {group.name !== null && group.name.trim() !== "" ? group.name : t("groups.unnamed")}
+          </h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {t("groups.count", { count: group.poster_count })}
+            {verifiedCount > 0 && <span className="text-acceptance"> · {verifiedCount} verified</span>}
+            {pendingCount > 0 && <span className="text-accent"> · {pendingCount} pending</span>}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button asChild variant="secondary" size="app-sm">
+            <a href={`/api/poster-groups/${group.id}/pdf`}>
+              {t("actions.download")} ↓
+            </a>
+          </Button>
+          {pendingCount > 0 && (
+            <Button size="app-sm" onClick={onVerify}>
+              Scan →
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {group.posters.map((poster) => (
+          <PosterChip key={poster.id} poster={poster} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PosterChip({ poster }: { poster: ClientPoster }) {
+  const statusColor: Record<PosterVerificationStatus, string> = {
+    pending: "text-accent",
+    in_review: "text-accent",
+    success: "text-acceptance",
+    rejected: "text-primary",
+    digital: "text-muted-foreground",
+  };
+
+  const prefix = poster.verification_status === "success" ? "✓ " : poster.verification_status === "rejected" ? "✕ " : "";
+
+  return (
+    <span className={cn("font-mono text-xs", statusColor[poster.verification_status])}>
+      {prefix}{poster.referral_code}
+    </span>
+  );
+}
+
+function PosterRow({
+  poster,
+  onVerify,
+}: {
+  poster: ClientPoster;
+  onVerify: () => void;
+}) {
+  const t = useTranslations("posters");
+  const statusColor: Record<PosterVerificationStatus, string> = {
+    pending: "text-accent",
+    in_review: "text-accent",
+    success: "text-acceptance",
+    rejected: "text-primary",
+    digital: "text-muted-foreground",
+  };
+
+  return (
+    <li className="flex items-center justify-between py-2">
+      <div className="flex items-center gap-3">
+        <span className="font-mono text-sm text-white">{poster.referral_code}</span>
+        <span className={cn("text-xs", statusColor[poster.verification_status])}>
+          {t(`status.${poster.verification_status}`)}
+        </span>
+      </div>
+      <div className="flex gap-2">
+        <a
+          href={`/api/posters/${poster.id}/pdf`}
+          className="text-sm text-muted-foreground hover:text-white"
+        >
+          ↓
+        </a>
+        {poster.verification_status === "pending" && (
+          <button
+            type="button"
+            onClick={onVerify}
+            className="text-sm text-primary hover:opacity-80"
+          >
+            Scan →
+          </button>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -269,10 +484,10 @@ function CreateSection({
   const t = useTranslations("posters");
 
   return (
-    <section className="rounded-xl border border-white/10 bg-white/[0.02] p-6">
+    <div className="space-y-6">
       <div className="grid gap-5 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wide text-muted-foreground">
+          <label className="text-xs tracking-wide text-muted-foreground">
             {t("campaign.label")}
           </label>
           {campaigns.length === 0 ? (
@@ -294,8 +509,8 @@ function CreateSection({
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wide text-muted-foreground">
-            {t("styles.color").replace("Full colour", "Style")}
+          <label className="text-xs tracking-wide text-muted-foreground">
+            Style
           </label>
           <div className="flex flex-wrap gap-2">
             {availableStyles.map((style) => (
@@ -317,17 +532,16 @@ function CreateSection({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 border-t border-white/10 pt-6 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-white">{t("singles.title")}</p>
+          <p className="text-sm text-muted-foreground">{t("singles.title")}</p>
           <Button size="app" onClick={createPoster} disabled={busy || campaignSlug === null}>
-            <Icon glyph="plus" size={16} />
-            {t("actions.create-poster")}
+            {t("actions.create-poster")} +
           </Button>
         </div>
 
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-white">{t("groups.title")}</p>
+          <p className="text-sm text-muted-foreground">{t("groups.title")}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={groupName}
@@ -346,128 +560,10 @@ function CreateSection({
             />
           </div>
           <Button size="app" onClick={createGroup} disabled={busy || campaignSlug === null}>
-            <Icon glyph="plus" size={16} />
-            {t("actions.create-group")}
+            {t("actions.create-group")} +
           </Button>
         </div>
       </div>
-    </section>
-  );
-}
-
-function GroupsSection({
-  groups,
-  onVerifyGroup,
-}: {
-  groups: ClientPosterGroup[];
-  onVerifyGroup: (group: ClientPosterGroup) => void;
-}) {
-  const t = useTranslations("posters");
-
-  return (
-    <section>
-      <h2 className="font-sub text-2xl text-white">{t("groups.title")}</h2>
-      {groups.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">{t("groups.empty")}</p>
-      ) : (
-        <ul className="mt-4 flex flex-col gap-4">
-          {groups.map((group) => (
-            <li
-              key={group.id}
-              className="rounded-xl border border-white/10 bg-white/[0.02] p-5"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-lg text-white">
-                    {group.name !== null && group.name.trim() !== "" ? group.name : t("groups.unnamed")}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {t("groups.count", { count: group.poster_count })} · {group.campaign_slug}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button asChild variant="secondary" size="app-sm">
-                    <a href={`/api/poster-groups/${group.id}/pdf`}>
-                      <Icon glyph="download" size={16} />
-                      {t("actions.download")}
-                    </a>
-                  </Button>
-                  <Button size="app-sm" onClick={() => onVerifyGroup(group)}>
-                    <Icon glyph="photo" size={16} />
-                    {t("actions.verify-group")}
-                  </Button>
-                </div>
-              </div>
-              <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {group.posters.map((poster) => (
-                  <PosterTile key={poster.id} poster={poster} />
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function StandaloneSection({
-  posters,
-  onVerifyPoster,
-}: {
-  posters: ClientPoster[];
-  onVerifyPoster: (poster: ClientPoster) => void;
-}) {
-  const t = useTranslations("posters");
-
-  return (
-    <section>
-      <h2 className="font-sub text-2xl text-white">{t("singles.title")}</h2>
-      {posters.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">{t("singles.empty")}</p>
-      ) : (
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {posters.map((poster) => (
-            <li key={poster.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-              <PosterTile poster={poster} dense={false} />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button asChild variant="secondary" size="app-sm">
-                  <a href={`/api/posters/${poster.id}/pdf`}>
-                    <Icon glyph="download" size={14} />
-                    {t("actions.download")}
-                  </a>
-                </Button>
-                {poster.verification_status === "pending" ? (
-                  <Button size="app-sm" onClick={() => onVerifyPoster(poster)}>
-                    <Icon glyph="photo" size={14} />
-                    {t("actions.verify")}
-                  </Button>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function PosterTile({ poster, dense = true }: { poster: ClientPoster; dense?: boolean }) {
-  const t = useTranslations("posters");
-  const statusTone: Record<PosterVerificationStatus, string> = {
-    pending: "text-accent",
-    in_review: "text-accent",
-    success: "text-acceptance",
-    rejected: "text-primary",
-    digital: "text-primary",
-  };
-
-  return (
-    <div className={cn("rounded-lg border border-white/10 bg-white/[0.03]", dense ? "p-3" : "p-0")}>
-      <p className="font-mono text-sm text-white">{t("poster-card.referral", { code: poster.referral_code })}</p>
-      <p className={cn("text-xs", statusTone[poster.verification_status])}>
-        {t(`status.${poster.verification_status}`)}
-      </p>
     </div>
   );
 }
@@ -644,59 +740,63 @@ function VerifyModal({
   }, [file, geoState, locationDescription, target, t]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8">
-      <div className="relative flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[var(--topbar)] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-6">
+      <div className="relative flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--topbar)] sm:rounded-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{targetLabel}</p>
+            <p className="text-xs text-muted-foreground">{targetLabel}</p>
             <h3 className="font-sub text-xl text-white">{t("verify-modal.title")}</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-white/70 hover:text-white"
+            className="text-muted-foreground hover:text-white"
             aria-label={t("actions.cancel")}
           >
-            <Icon glyph="view-close" size={20} />
+            ✕
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        {/* Progress */}
+        {!result && (
+          <div className="flex gap-1 px-5">
+            <div className={cn("h-0.5 flex-1 rounded-full", file ? "bg-acceptance" : "bg-primary")} />
+            <div className={cn("h-0.5 flex-1 rounded-full", geoState.kind === "ok" ? "bg-acceptance" : file ? "bg-primary" : "bg-white/10")} />
+            <div className={cn("h-0.5 flex-1 rounded-full", canSubmit ? "bg-primary" : "bg-white/10")} />
+          </div>
+        )}
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-5">
           {result ? (
             <ResultView result={result} />
           ) : (
             <div className="space-y-5">
-              <p className="text-sm text-muted-foreground">{t("verify-modal.description")}</p>
-
-              <GeolocationStatus state={geoState} onRetry={retryGeo} />
-
-              <div className="space-y-2">
-                <label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("verify-modal.location-description-label")}
-                </label>
-                <Textarea
-                  value={locationDescription}
-                  onChange={(event) => setLocationDescription(event.target.value)}
-                  placeholder={t("verify-modal.location-description-placeholder")}
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div className="space-y-3">
-                {safePreviewUrl !== null ? (
-                  <div className="relative h-48 overflow-hidden rounded-lg border border-white/10">
-                    <Image
-                      src={safePreviewUrl}
-                      alt=""
-                      fill
-                      unoptimized
-                      sizes="(max-width: 640px) 100vw, 32rem"
-                      className="object-cover"
-                    />
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
+              {/* Photo */}
+              {safePreviewUrl !== null ? (
+                <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg">
+                  <Image
+                    src={safePreviewUrl}
+                    alt=""
+                    fill
+                    unoptimized
+                    sizes="(max-width: 640px) 100vw, 32rem"
+                    className="object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFile(null)}
+                    className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-1 text-xs text-white backdrop-blur-sm"
+                  >
+                    retake
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {t("verify-modal.description")}
+                  </p>
                   <input
                     ref={cameraInputRef}
                     type="file"
@@ -712,63 +812,67 @@ function VerifyModal({
                     className="hidden"
                     onChange={(event) => handleSelectedFile(event.target.files?.[0] ?? null)}
                   />
-                  <Button type="button" size="app" onClick={() => cameraInputRef.current?.click()}>
-                    <Icon glyph="photo" size={16} />
-                    {t("actions.use-camera")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="app"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Icon glyph="attachment" size={16} />
-                    {t("actions.choose-file")}
-                  </Button>
-                  {file ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="app"
-                      onClick={() => setFile(null)}
-                    >
-                      {t("actions.retake")}
+                  <div className="flex gap-2">
+                    <Button size="app" onClick={() => cameraInputRef.current?.click()}>
+                      {t("actions.use-camera")} →
                     </Button>
-                  ) : null}
+                    <Button variant="secondary" size="app" onClick={() => fileInputRef.current?.click()}>
+                      {t("actions.choose-file")}
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {target.kind === "group" ? (
-                <p className="text-xs text-muted-foreground">{t("verify-modal.auto-detect")}</p>
-              ) : null}
+              {/* Location */}
+              {file !== null && <GeolocationStatus state={geoState} onRetry={retryGeo} />}
 
-              {error !== null ? (
-                <p className="text-sm text-primary">{error}</p>
-              ) : null}
+              {/* Description */}
+              {file !== null && geoState.kind === "ok" && (
+                <div className="space-y-2">
+                  <label className="text-xs tracking-wide text-muted-foreground">
+                    Where is this poster?
+                  </label>
+                  <Textarea
+                    value={locationDescription}
+                    onChange={(event) => setLocationDescription(event.target.value)}
+                    placeholder={t("verify-modal.location-description-placeholder")}
+                    rows={2}
+                    required
+                    autoFocus
+                  />
+                  {target.kind === "group" && (
+                    <p className="text-xs text-muted-foreground">{t("verify-modal.auto-detect")}</p>
+                  )}
+                </div>
+              )}
+
+              {error !== null && <p className="text-sm text-primary">{error}</p>}
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-white/10 bg-black/30 px-6 py-4">
+        {/* Footer */}
+        <div className="px-5 pb-5 pt-2">
           {result ? (
             <Button
               size="app"
+              className="w-full"
               onClick={() => {
                 setResult(null);
                 onDone();
               }}
             >
-              {t("actions.cancel")}
+              Done
             </Button>
           ) : (
-            <>
-              <Button variant="secondary" size="app" onClick={onClose}>
-                {t("actions.cancel")}
-              </Button>
-              <Button size="app" onClick={handleSubmit} disabled={!canSubmit}>
-                {submitting ? t("actions.submitting") : t("actions.submit")}
-              </Button>
-            </>
+            <Button
+              size="app"
+              className="w-full"
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+            >
+              {submitting ? t("actions.submitting") : `${t("actions.submit")} →`}
+            </Button>
           )}
         </div>
       </div>
@@ -781,55 +885,46 @@ function GeolocationStatus({ state, onRetry }: { state: GeoState; onRetry: () =>
 
   if (state.kind === "ok") {
     return (
-      <div className="rounded-lg border border-acceptance/40 bg-acceptance/5 px-4 py-3 text-sm text-acceptance">
-        <p>{t("verify-modal.coordinates", { lat: state.latitude.toFixed(6), lng: state.longitude.toFixed(6) })}</p>
-        <p className="text-xs text-acceptance/80">
-          {t("verify-modal.accuracy", { meters: Math.round(state.accuracy) })}
-        </p>
-      </div>
+      <p className="text-sm text-acceptance">
+        ✓ Location locked · ±{Math.round(state.accuracy)}m
+      </p>
     );
   }
 
   if (state.kind === "error") {
     return (
-      <div className="rounded-lg border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
-        <p>{state.message}</p>
-        <Button type="button" variant="secondary" size="app-sm" onClick={onRetry} className="mt-2">
-          {t("verify-modal.location-retry")}
-        </Button>
+      <div className="space-y-2">
+        <p className="text-sm text-primary">{state.message}</p>
+        <button type="button" onClick={onRetry} className="text-sm text-muted-foreground hover:text-white">
+          {t("verify-modal.location-retry")} →
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm text-muted-foreground">
-      {t("verify-modal.location-pending")}
-    </div>
+    <p className="text-sm text-muted-foreground">
+      Acquiring location...
+    </p>
   );
 }
 
 function ResultView({ result }: { result: ScanResult }) {
   const t = useTranslations("posters");
-  const tone =
-    result.status === "success" || result.status === "auto_matched" || result.status === "already_verified"
-      ? "text-acceptance"
-      : result.status === "in_review"
-        ? "text-accent"
-        : "text-primary";
+  const isSuccess = result.status === "success" || result.status === "auto_matched" || result.status === "already_verified";
+  const isReview = result.status === "in_review";
 
   return (
-    <div className="space-y-3">
-      <p className={cn("text-lg", tone)}>{t(`results.${result.status}`)}</p>
-      <p className="text-sm text-muted-foreground">{result.message}</p>
-      {result.detectedQrCodes.length > 0 ? (
-        <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-          {result.detectedQrCodes.map((code) => (
-            <li key={code} className="break-all font-mono">
-              {code}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+    <div className="space-y-3 py-4">
+      <p className={cn("font-sub text-2xl", isSuccess ? "text-acceptance" : isReview ? "text-accent" : "text-primary")}>
+        {isSuccess ? "✓" : isReview ? "◷" : "✕"} {t(`results.${result.status}`)}
+      </p>
+      <p className="text-base text-muted-foreground">{result.message}</p>
+      {result.detectedQrCodes.length > 0 && (
+        <p className="font-mono text-xs text-muted-foreground">
+          {result.detectedQrCodes.join(" · ")}
+        </p>
+      )}
     </div>
   );
 }
