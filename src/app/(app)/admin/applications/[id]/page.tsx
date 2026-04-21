@@ -297,14 +297,15 @@ export default async function AdminApplicationDetailPage({
         <section className="pt-4">
           <h2 className="text-2xl text-white">{t("admin.application-detail.locked.title")}</h2>
           <p className="mt-2 max-w-3xl font-body text-base text-white">
-            {t("admin.application-detail.locked.body")}
+            {t("admin.application-detail.locked.body")}{" "}
+            <Link
+              href={`/admin/applications/${application.latest_application_id}`}
+              aria-label={t("admin.application-detail.locked.cta")}
+              className="ui-open-link inline-flex"
+            >
+              <span aria-hidden="true">↗</span>
+            </Link>
           </p>
-          <Link
-            href={`/admin/applications/${application.latest_application_id}`}
-            className={`${buttonVariants({ size: "app-sm" })} mt-4`}
-          >
-            {t("admin.application-detail.locked.cta")}
-          </Link>
         </section>
       )}
 

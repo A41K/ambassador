@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useTransition, useRef, useEffect } from "react";
-import { ChevronDownIcon, CheckIcon, XIcon } from "lucide-react";
+import { ChevronDownIcon, CheckIcon } from "lucide-react";
 
 import { SlackAvatar } from "@/components/admin/slack-profile";
 import {
@@ -21,6 +21,11 @@ function SelectionIndicator({ checked }: { checked: boolean }) {
   }
 
   return <CheckIcon className="size-4 shrink-0 text-[var(--acceptance)]" aria-hidden="true" />;
+}
+
+function getPathWithParams(pathname: string, params: URLSearchParams) {
+  const query = params.toString();
+  return query === "" ? pathname : `${pathname}?${query}`;
 }
 
 export function EventTypeFilter({
@@ -50,7 +55,7 @@ export function EventTypeFilter({
           }
           params.delete("page");
           startTransition(() => {
-            router.replace(`${pathname}?${params.toString()}`);
+            router.replace(getPathWithParams(pathname, params));
           });
         }}
       >
@@ -82,12 +87,14 @@ export function UserMultiSelect({
   allLabel,
   selectAllLabel,
   deselectAllLabel,
+  noneLabel,
   selectionNoun = "users",
 }: {
   users: UserOption[];
   allLabel: string;
   selectAllLabel: string;
   deselectAllLabel: string;
+  noneLabel: string;
   selectionNoun?: string;
 }) {
   const router = useRouter();
@@ -99,13 +106,21 @@ export function UserMultiSelect({
 
   const selectedParam = searchParams.get("users");
   const noneSelected = selectedParam === "__none__";
-  const selectedIds: Set<string> = noneSelected
+  const selectedIdsFromUrl: Set<string> = noneSelected
     ? new Set()
     : selectedParam
     ? new Set(selectedParam.split(",").filter(Boolean))
     : new Set();
+  const availableUserIds = new Set(users.map((user) => user.id));
+  const selectedIds = new Set(
+    Array.from(selectedIdsFromUrl).filter((userId) => availableUserIds.has(userId)),
+  );
 
-  const allSelected = noneSelected === false && selectedIds.size === 0;
+  const allSelected =
+    noneSelected === false &&
+    (selectedParam === null ||
+      selectedParam === "" ||
+      (users.length > 0 && selectedIds.size === users.length));
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -123,14 +138,16 @@ export function UserMultiSelect({
     const params = new URLSearchParams(searchParams.toString());
     if (mode === "none") {
       params.set("users", "__none__");
-    } else if (mode === "all" || ids.size === 0 || ids.size === users.length) {
+    } else if (mode === "all" || ids.size === users.length) {
       params.delete("users");
+    } else if (ids.size === 0) {
+      params.set("users", "__none__");
     } else {
       params.set("users", Array.from(ids).join(","));
     }
     params.delete("page");
     startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`);
+      router.replace(getPathWithParams(pathname, params));
     });
   }
 
@@ -149,8 +166,8 @@ export function UserMultiSelect({
     : selectedIds.size === 1
       ? users.find((u) => selectedIds.has(u.id))?.displayName ?? allLabel
       : noneSelected
-        ? allLabel
-      : `${selectedIds.size} ${selectionNoun}`;
+        ? noneLabel
+        : `${selectedIds.size} ${selectionNoun}`;
 
   return (
     <div ref={ref} className={`relative w-full sm:w-56 ${isPending ? "opacity-60" : ""}`}>
@@ -189,7 +206,7 @@ export function UserMultiSelect({
             }}
             className="flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
-            <XIcon className="size-4 shrink-0" />
+            <SelectionIndicator checked={noneSelected} />
             {deselectAllLabel}
           </button>
           {users.map((user) => {

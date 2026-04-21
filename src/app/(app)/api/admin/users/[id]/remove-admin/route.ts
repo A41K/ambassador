@@ -61,7 +61,7 @@ export async function POST(
       targetUserId: id,
       action: "user_admin_password_rejected",
       metadata: {
-        attemptedAction: "promote_admin",
+        attemptedAction: "demote_admin",
       },
     });
     revalidatePath("/admin/audit-log");
@@ -71,19 +71,19 @@ export async function POST(
 
   await sql`
     UPDATE users
-    SET is_admin = TRUE,
+    SET is_admin = FALSE,
         updated_at = NOW()
     WHERE id = ${id}
   `;
 
-  if (existingUser.is_admin !== true) {
+  if (existingUser.is_admin === true) {
     await logAdminActionEvent({
       actorUserId: session.sub,
       targetUserId: id,
-      action: "user_promoted_to_admin",
+      action: "user_demoted_from_admin",
       metadata: {
-        previousIsAdmin: Boolean(existingUser.is_admin),
-        nextIsAdmin: true,
+        previousIsAdmin: true,
+        nextIsAdmin: false,
       },
     });
   }

@@ -1,12 +1,18 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import Icon from "@hackclub/icons";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { SearchBar } from "@/components/admin/search-bar";
 import { SortToggle } from "@/components/admin/sort-toggle";
 import { Pagination } from "@/components/admin/pagination";
 import { EventTypeFilter, UserMultiSelect } from "@/components/admin/audit-log-filters";
+import { LocalDateTime } from "@/components/admin/local-date-time";
 import { getTranslatedPageMetadata } from "@/i18n/metadata";
+import {
+  formatAuditEventSummary,
+  formatEventType,
+} from "@/lib/admin-action-event-format";
 import type { AdminActionEvent } from "@/lib/admin-action-events";
 import sql from "@/lib/database/client";
 import { ensureSchema } from "@/lib/database/ensure-schema";
@@ -34,6 +40,8 @@ const EVENT_TYPES: AdminActionEvent[] = [
   "application_deleted",
   "application_tshirt_sent_updated",
   "hcb_credentials_reauthorized",
+  "user_admin_password_rejected",
+  "user_demoted_from_admin",
   "user_impersonation_started",
   "user_impersonation_stopped",
   "user_hcb_grant_linked",
@@ -43,13 +51,6 @@ const EVENT_TYPES: AdminActionEvent[] = [
   "user_posters_enabled_updated",
   "user_promoted_to_admin",
 ];
-
-function formatEventType(event: string): string {
-  return event
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
 
 export async function generateMetadata(): Promise<Metadata> {
   return getTranslatedPageMetadata("admin.audit-log.metadata.title");
@@ -162,6 +163,7 @@ export default async function AdminAuditLogPage({
             allLabel={t("admin.audit-log.user-filter.all")}
             selectAllLabel={t("admin.audit-log.user-filter.select-all")}
             deselectAllLabel={t("admin.audit-log.user-filter.deselect-all")}
+            noneLabel={t("admin.audit-log.user-filter.none")}
             selectionNoun={t("admin.audit-log.user-filter.selection-noun")}
           />
           <SortToggle defaultSort="newest" />
@@ -176,15 +178,14 @@ export default async function AdminAuditLogPage({
               <th className="px-5 py-4 font-body text-base text-secondary">{t("admin.audit-log.columns.target")}</th>
               <th className="px-5 py-4 font-body text-base text-secondary">{t("admin.audit-log.columns.details")}</th>
               <th className="px-5 py-4 font-body text-base text-secondary">{t("admin.audit-log.columns.when")}</th>
+              <th className="px-5 py-4 font-body text-base text-secondary">{t("admin.audit-log.columns.open")}</th>
             </tr>
           </thead>
           <tbody>
             {events.map((event) => (
               <tr key={event.id} className="border-b border-white">
-                <td className="px-5 py-4">
-                  <span className="inline-block border border-white/10 bg-muted px-2 py-0.5 font-mono text-xs text-white">
-                    {formatEventType(event.action)}
-                  </span>
+                <td className="px-5 py-4 font-body text-base text-white">
+                  {formatEventType(event.action)}
                 </td>
                 <td className="px-5 py-4 font-body text-base text-white">
                   {event.actor_user_id ? (
@@ -210,25 +211,28 @@ export default async function AdminAuditLogPage({
                     <span className="text-secondary">-</span>
                   )}
                 </td>
-                <td className="max-w-48 px-5 py-4 font-mono text-xs text-secondary">
-                  {Object.keys(event.metadata).length > 0 ? (
-                    <span className="truncate block" title={JSON.stringify(event.metadata)}>
-                      {Object.entries(event.metadata)
-                        .map(([k, v]) => `${k}: ${String(v)}`)
-                        .join(", ")}
-                    </span>
-                  ) : (
-                    "-"
-                  )}
+                <td className="max-w-sm px-5 py-4 font-body text-sm text-secondary">
+                  <span className="line-clamp-2" title={formatAuditEventSummary(event)}>
+                    {formatAuditEventSummary(event)}
+                  </span>
                 </td>
                 <td className="whitespace-nowrap px-5 py-4 font-body text-base text-white">
-                  {new Date(event.created_at).toLocaleString(locale)}
+                  <LocalDateTime value={event.created_at} locale={locale} />
+                </td>
+                <td className="px-5 py-4">
+                  <Link
+                    href={`/admin/audit-log/${event.id}`}
+                    aria-label={t("admin.audit-log.view-event")}
+                    className="ui-open-link inline-flex font-body text-lg leading-none"
+                  >
+                    <Icon glyph="external" size={20} />
+                  </Link>
                 </td>
               </tr>
             ))}
             {events.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-10 text-center font-body text-base text-white">
+                <td colSpan={6} className="px-5 py-10 text-center font-body text-base text-white">
                   {t("admin.audit-log.empty")}
                 </td>
               </tr>

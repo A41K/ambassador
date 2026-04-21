@@ -330,8 +330,14 @@ function resolveState({
             title={t("dashboard.approved.title")}
             body={t("dashboard.approved.body")}
           />
-          <OfficeGrantSection officeGrant={officeGrant} />
-          {canUseShirts ? <ShirtOrderSection {...shirt} /> : null}
+          {shirt.requiresOnboarding ? (
+            <OnboardingPromptBanner onboardingFormUrl={shirt.onboardingFormUrl} t={t} />
+          ) : (
+            <>
+              <OfficeGrantSection officeGrant={officeGrant} />
+              {canUseShirts ? <ShirtOrderSection {...shirt} /> : null}
+            </>
+          )}
         </div>
       ),
       activeStep: "decision",
@@ -423,6 +429,34 @@ function resolveState({
   if (isRejectedApplicationStatus(application.status)) return states.rejected;
   if (isRejectedPermanentlyApplicationStatus(application.status)) return states.banned;
   return { node: null, activeStep: null, decision: null, devState: "apply" };
+}
+
+function OnboardingPromptBanner({
+  onboardingFormUrl,
+  t,
+}: {
+  onboardingFormUrl: string;
+  t: DashboardTranslations;
+}) {
+  return (
+    <section className="border border-[var(--primary)]/40 bg-[var(--primary)]/10 p-4">
+      <p className="font-body text-sm leading-relaxed text-white">
+        <span className="font-bold text-[var(--primary)]">
+          {t("dashboard.onboarding.title")}
+        </span>{" "}
+        {t("dashboard.onboarding.body")}{" "}
+        <a
+          href={onboardingFormUrl}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={t("dashboard.onboarding.cta")}
+          className="ui-open-link inline-flex"
+        >
+          ↗
+        </a>
+      </p>
+    </section>
+  );
 }
 
 function OfficeGrantSection({

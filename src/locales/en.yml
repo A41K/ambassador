@@ -76,6 +76,10 @@ dashboard:
     title: You're an Ambassador!
     body: Your application has been approved. Welcome to the team!
     status: Active Ambassador
+  onboarding:
+    title: "Complete onboarding first:"
+    body: Finish ambassador onboarding to unlock your office grant and shirt order
+    cta: Complete onboarding
   rejected:
     eyebrow: Try Again
     title: Apply to be an Ambassador
@@ -314,7 +318,7 @@ admin:
   audit-log:
     metadata:
       title: Audit log
-    title: Audit Log
+    title: Audit log
     empty: No audit events recorded yet
     unknown-user: Unknown user
     system: System
@@ -322,6 +326,7 @@ admin:
       all: All events
     user-filter:
       all: All admins
+      none: No admins
       selection-noun: admins
       select-all: Select all
       deselect-all: Deselect all
@@ -331,6 +336,25 @@ admin:
       target: Target
       details: Details
       when: When
+      open: Open
+    view-event: View audit event
+    event-detail:
+      metadata:
+        title: Audit event
+      breadcrumb: Audit log
+      no-details: No additional details were recorded.
+      sections:
+        event:
+          title: Event
+          description: What happened and when it was recorded.
+        people:
+          title: People
+          description: The admin who caused the event and the user it affected.
+        details:
+          title: Details
+          description: Human-readable event data captured with this audit entry.
+      fields:
+        event-id: Event id
   overview:
     metadata:
       title: Overview
@@ -636,6 +660,8 @@ admin:
       impersonate: Impersonate user
       make-admin: Make admin
       make-admin-confirmation: Are you sure you want to make this user an admin?
+      remove-admin: Remove admin
+      remove-admin-confirmation: Are you sure you want to remove admin access from this user?
       bypass-approval: Bypass approval
       reject-note-label: Reject note
       reject-note-placeholder: Why this user should be rejected
@@ -646,6 +672,10 @@ admin:
       save-flags: Save flags
       save-note: Save note
       no-review-target: This user does not have any applications yet, so there is no review target to update.
+    superuser:
+      password-label: Superuser password
+      missing: SUPERUSER_PASSWORD is not configured, so admin access changes are disabled.
+      invalid: That superuser password was not accepted.
     notes:
       current-note: Current note
       note-label: Note

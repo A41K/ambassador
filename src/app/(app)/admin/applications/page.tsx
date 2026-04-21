@@ -50,6 +50,27 @@ const APPLICATION_STATUS_FILTER_OPTIONS = [
   { value: APPLICATION_STATUS_REJECTED_PERMANENT, labelKey: "admin.status-filter.rejected-permanently" },
 ] as const;
 
+function dedupeRepeatedLastName(value: string | null | undefined) {
+  const trimmedValue = value?.trim() ?? "";
+
+  if (trimmedValue === "") {
+    return null;
+  }
+
+  const parts = trimmedValue.split(/\s+/);
+
+  if (parts.length >= 3) {
+    const lastPart = parts.at(-1)?.toLocaleLowerCase();
+    const previousPart = parts.at(-2)?.toLocaleLowerCase();
+
+    if (lastPart !== undefined && lastPart === previousPart) {
+      return parts.slice(0, -1).join(" ");
+    }
+  }
+
+  return trimmedValue;
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   return getTranslatedPageMetadata("admin.applications-list.metadata.title");
 }
@@ -164,63 +185,71 @@ export default async function AdminApplicationsPage({
             </tr>
           </thead>
           <tbody>
-            {applications.map((application) => (
-              <tr key={application.id} className="border-b border-white">
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <SlackAvatar
-                      slackId={application.slack_id ?? application.applicant_slack_id}
-                      fallbackName={application.slack_name ?? application.user_name ?? application.name}
-                      sizeClassName="h-12 w-12"
-                    />
-                    <div>
-                      <div className="font-body text-base text-white">
-                        {application.user_name ?? application.name ?? "-"}
-                      </div>
-                      <div className="font-body text-sm text-white">
-                        {application.user_email ?? application.applicant_email ?? "-"}
+            {applications.map((application) => {
+              const applicantName =
+                dedupeRepeatedLastName(application.user_name) ??
+                dedupeRepeatedLastName(application.name) ??
+                "-";
+              const applicationName = dedupeRepeatedLastName(application.name) ?? "-";
+
+              return (
+                <tr key={application.id} className="border-b border-white">
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <SlackAvatar
+                        slackId={application.slack_id ?? application.applicant_slack_id}
+                        fallbackName={application.slack_name ?? applicantName}
+                        sizeClassName="h-12 w-12"
+                      />
+                      <div>
+                        <div className="font-body text-base text-white">
+                          {applicantName}
+                        </div>
+                        <div className="font-body text-sm text-white">
+                          {application.user_email ?? application.applicant_email ?? "-"}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-5 py-4 font-body text-base text-white">
-                  {application.name ?? "-"}
-                </td>
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={application.status} />
-                    {application.is_latest === true ? (
-                      <span className={pillVariants({ tone: "green" })}>
-                        {t("admin.applications-list.latest")}
-                      </span>
-                    ) : (
-                      <span className={pillVariants({ tone: "black" })}>
-                        {t("admin.applications-list.history")}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-5 py-4 font-body text-base text-white">
-                  {application.city !== null && application.country_code !== null
-                    ? `${application.city}, ${application.country_code}`
-                    : application.address_city !== null && application.address_country !== null
-                      ? `${application.address_city}, ${application.address_country}`
-                      : "-"}
-                </td>
-                <td className="px-5 py-4 font-body text-base text-white">
-                  {new Date(application.created_at).toLocaleDateString(locale)}
-                </td>
-                <td className="px-5 py-4">
-                  <Link
-                    href={`/admin/applications/${application.id}`}
-                    aria-label={t("admin.applications-list.view-details")}
-                    className="ui-open-link inline-flex font-body text-lg leading-none"
-                  >
-                    <span aria-hidden="true">↗</span>
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-5 py-4 font-body text-base text-white">
+                    {applicationName}
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={application.status} />
+                      {application.is_latest === true ? (
+                        <span className={pillVariants({ tone: "green" })}>
+                          {t("admin.applications-list.latest")}
+                        </span>
+                      ) : (
+                        <span className={pillVariants({ tone: "black" })}>
+                          {t("admin.applications-list.history")}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 font-body text-base text-white">
+                    {application.city !== null && application.country_code !== null
+                      ? `${application.city}, ${application.country_code}`
+                      : application.address_city !== null && application.address_country !== null
+                        ? `${application.address_city}, ${application.address_country}`
+                        : "-"}
+                  </td>
+                  <td className="px-5 py-4 font-body text-base text-white">
+                    {new Date(application.created_at).toLocaleDateString(locale)}
+                  </td>
+                  <td className="px-5 py-4">
+                    <Link
+                      href={`/admin/applications/${application.id}`}
+                      aria-label={t("admin.applications-list.view-details")}
+                      className="ui-open-link inline-flex font-body text-lg leading-none"
+                    >
+                      <span aria-hidden="true">↗</span>
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
             {applications.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-5 py-10 text-center font-body text-base text-white">
