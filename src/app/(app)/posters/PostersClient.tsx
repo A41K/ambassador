@@ -71,8 +71,7 @@ type ScanResult = {
     | "already_verified"
     | "in_review"
     | "no_qr"
-    | "no_match"
-    | "wrong_group";
+    | "no_match";
   detectedQrCodes: string[];
   message: string;
 };
@@ -406,7 +405,6 @@ export function PostersClient({
 
       {verifyTarget ? (
         <VerifyModal
-          target={verifyTarget}
           onClose={() => setVerifyTarget(null)}
           onDone={handleVerified}
         />
@@ -1175,11 +1173,9 @@ function useGeolocation(enabled: boolean) {
 }
 
 function VerifyModal({
-  target,
   onClose,
   onDone,
 }: {
-  target: VerifyTarget;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -1209,12 +1205,7 @@ function VerifyModal({
         formData.append("longitude", String(geoState.longitude));
         formData.append("locationAccuracy", String(geoState.accuracy));
 
-        const url =
-          target.kind === "group"
-            ? `/api/poster-groups/${target.group.id}/scan`
-            : `/api/posters/${target.poster.id}/proof`;
-
-        const response = await fetch(url, { method: "POST", body: formData });
+        const response = await fetch("/api/posters/scan", { method: "POST", body: formData });
         const data = await response.json().catch(() => null);
         const payload: Record<string, unknown> | null =
           typeof data === "object" && data !== null && !Array.isArray(data)
@@ -1234,8 +1225,7 @@ function VerifyModal({
           status !== "already_verified" &&
           status !== "in_review" &&
           status !== "no_qr" &&
-          status !== "no_match" &&
-          status !== "wrong_group"
+          status !== "no_match"
         ) {
           throw new Error(t("errors.upload-failed"));
         }
@@ -1249,7 +1239,7 @@ function VerifyModal({
         setSubmitting(false);
       }
     },
-    [geoState, target, t],
+    [geoState, t],
   );
 
   const step: "location" | "capture" | "processing" | "done" =
@@ -1482,7 +1472,7 @@ function CaptureStep({
             }
             aria-label={t("capture.flip-camera")}
             title={t("capture.flip-camera")}
-            className="absolute right-3 top-3 inline-flex size-10 items-center justify-center bg-[#000] text-white transition-opacity hover:opacity-90"
+            className="absolute right-3 top-3 inline-flex size-10 cursor-pointer items-center justify-center text-white transition-opacity hover:opacity-90"
           >
             <SwitchCamera size={20} />
           </button>

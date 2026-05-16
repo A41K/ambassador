@@ -123,7 +123,7 @@ export type ScanMatchResult =
       message: string;
     }
   | {
-      status: "wrong_group" | "no_match" | "no_qr";
+      status: "no_match" | "no_qr";
       detectedQrCodes: string[];
       message: string;
       poster?: PosterRow | null;

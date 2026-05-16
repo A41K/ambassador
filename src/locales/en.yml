@@ -225,7 +225,6 @@ posters:
     in_review: Sent to review, a human will check it soon.
     no_qr: We could not read a QR code. Try again with a clearer photo.
     no_match: The QR code did not match any of your pending posters.
-    wrong_group: That QR belongs to a different group or poster.
   errors:
     create-failed: Could not create poster.
     load-failed: Could not load your posters.
