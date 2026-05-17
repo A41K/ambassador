@@ -186,6 +186,8 @@ posters:
     delete-disabled: Until referrals start syncing, we will not be allowing any poster deletions
     rename: Rename
     rename-poster: "Rename poster {code}"
+    rename-group: "Rename group {name}"
+    rename-group-placeholder: Group name
     rename-save: Save
     rename-cancel: Cancel
     rename-placeholder: Poster name
@@ -237,6 +239,7 @@ posters:
     geolocation-unavailable: Your browser does not support geolocation.
     geolocation-denied: Precise location access was denied. Please enable it in your browser settings.
     rename-failed: Could not rename poster.
+    rename-group-failed: Could not rename group.
 
 referrals:
   metadata:

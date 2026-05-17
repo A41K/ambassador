@@ -464,3 +464,14 @@ export async function updatePosterName(posterId: string, name: string | null) {
 
   return poster;
 }
+
+export async function updatePosterGroupName(groupId: string, name: string | null) {
+  const [group] = await sql<PosterGroupRow[]>`
+    UPDATE poster_groups
+    SET name = ${name}, updated_at = NOW()
+    WHERE id = ${groupId}
+    RETURNING *
+  `;
+
+  return group;
+}

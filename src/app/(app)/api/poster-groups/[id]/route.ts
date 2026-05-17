@@ -2,6 +2,7 @@ import {
   addPostersToGroupForUser,
   deletePosterGroupForUser,
   getPosterGroupForUserOrThrow,
+  renamePosterGroupForUser,
 } from "@/lib/posters/service";
 import { isSameOriginRequest, posterErrorResponse, requirePosterSession } from "@/lib/posters/http";
 import { checkRateLimit, getRateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
@@ -49,6 +50,40 @@ export async function POST(request: Request, context: RouteContext<"/api/poster-
     return Response.json(result, { status: 201 });
   } catch (error) {
     return posterErrorResponse(error, "Failed to add posters to group.", 400);
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext<"/api/poster-groups/[id]">) {
+  if (!isSameOriginRequest(request)) {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
+  try {
+    const session = await requirePosterSession();
+    const rateLimit = await checkRateLimit({
+      scope: "poster-write",
+      key: getRateLimitKey(session.sub),
+      limit: 1_000,
+    });
+
+    if (!rateLimit.ok) {
+      return rateLimitResponse(rateLimit);
+    }
+
+    const { id } = await context.params;
+    const body = (await request.json().catch(() => null)) as { name?: unknown } | null;
+    const rawName = body?.name;
+    if (rawName !== null && typeof rawName !== "string" && rawName !== undefined) {
+      return Response.json({ error: "Invalid name." }, { status: 400 });
+    }
+
+    const result = await renamePosterGroupForUser(
+      session.sub,
+      id,
+      typeof rawName === "string" ? rawName : null,
+    );
+    return Response.json(result);
+  } catch (error) {
+    return posterErrorResponse(error, "Failed to rename poster group.", 400);
   }
 }
 

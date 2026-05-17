@@ -366,7 +366,7 @@ export function PostersClient({
                   group={group}
                   busy={busy}
                   onAddPosters={(count) => addPostersToGroup(group.id, count)}
-                  onPosterRenamed={refresh}
+                  onRefresh={refresh}
                 />
               ))}
             </div>
@@ -429,40 +429,107 @@ function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () =>
   );
 }
 
+async function renamePosterGroupRequest(groupId: string, name: string | null) {
+  const response = await fetch(`/api/poster-groups/${groupId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+}
+
 function GroupCard({
   group,
   busy,
   onAddPosters,
-  onPosterRenamed,
+  onRefresh,
 }: {
   group: ClientPosterGroup;
   busy: boolean;
   onAddPosters: (count: number) => void;
-  onPosterRenamed: () => void;
+  onRefresh: () => void;
 }) {
   const t = useTranslations("posters");
   const [addCount, setAddCount] = useState(1);
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(group.name ?? "");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
   const pendingCount = group.posters.filter((p) => p.verification_status === "pending").length;
   const verifiedCount = group.posters.filter((p) => p.verification_status === "success").length;
   const scanCount = group.posters.reduce((total, poster) => total + poster.scanCount, 0);
   const hasVerifiedPosters = group.posters.some((poster) => poster.verification_status === "success");
   const canDeleteGroup = !hasVerifiedPosters && scanCount === 0;
   const remaining = Math.max(0, 20 - group.posters.length);
+  const displayName = group.name !== null && group.name.trim() !== "" ? group.name : t("groups.unnamed");
+
+  useEffect(() => {
+    if (editingName) {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }
+  }, [editingName]);
+
+  async function commitGroupRename() {
+    const next = draftName.trim();
+    if (next === (group.name ?? "")) {
+      setEditingName(false);
+      setRenameError(null);
+      return;
+    }
+    setRenameBusy(true);
+    setRenameError(null);
+    try {
+      await renamePosterGroupRequest(group.id, next === "" ? null : next);
+      setEditingName(false);
+      onRefresh();
+    } catch {
+      setRenameError(t("errors.rename-group-failed"));
+    } finally {
+      setRenameBusy(false);
+    }
+  }
+
+  function cancelGroupRename() {
+    setEditingName(false);
+    setDraftName(group.name ?? "");
+    setRenameError(null);
+  }
 
   return (
     <div className="rounded-lg border border-foreground/10 bg-card p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="font-body text-base font-medium text-foreground">
-            {group.name !== null && group.name.trim() !== "" ? group.name : t("groups.unnamed")}
-          </h3>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          {editingName ? (
+            <PosterRenameControls
+              inputRef={nameInputRef}
+              draftName={draftName}
+              setDraftName={setDraftName}
+              busy={renameBusy}
+              placeholder={t("actions.rename-group-placeholder")}
+              ariaLabel={t("actions.rename-group", { name: displayName })}
+              onCommit={() => void commitGroupRename()}
+              onCancel={cancelGroupRename}
+            />
+          ) : (
+            <h3 className="font-body text-base font-medium text-foreground">
+              {displayName}
+            </h3>
+          )}
           <p className="mt-0.5 text-sm text-muted-foreground">
             {t("groups.count", { count: group.poster_count })}
             {verifiedCount > 0 && <> · <span className="text-acceptance">{verifiedCount} verified</span></>}
             {pendingCount > 0 && <> · <span className="text-accent">{pendingCount} pending</span></>}
             {scanCount > 0 && <> · {scanCount} referral{scanCount === 1 ? "" : "s"}</>}
           </p>
+          {renameError !== null ? (
+            <p className="mt-1 text-xs text-primary">{renameError}</p>
+          ) : null}
         </div>
+        {!editingName && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <a
             href={`/api/poster-groups/${group.id}/pdf`}
@@ -482,6 +549,21 @@ function GroupCard({
             <span className="sm:hidden">ZIP</span>
             <span className="hidden sm:inline">Download group (ZIP)</span>
           </a>
+          <button
+            type="button"
+            data-slot="icon-link"
+            onClick={() => {
+              setDraftName(group.name ?? "");
+              setEditingName(true);
+              setRenameError(null);
+            }}
+            aria-label={t("actions.rename-group", { name: displayName })}
+            title={t("actions.rename-group", { name: displayName })}
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent p-0 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Pencil size={16} />
+            {t("actions.rename")}
+          </button>
           {canDeleteGroup ? (
             <HoverHint message={t("actions.delete-disabled")}>
               <button
@@ -498,6 +580,7 @@ function GroupCard({
             </HoverHint>
           ) : null}
         </div>
+        )}
       </div>
 
       {remaining > 0 ? (
@@ -527,7 +610,7 @@ function GroupCard({
           <PosterTreeItem
             key={poster.id}
             poster={poster}
-            onRenamed={onPosterRenamed}
+            onRenamed={onRefresh}
           />
         ))}
       </ul>
@@ -578,7 +661,8 @@ function PosterRenameControls({
   draftName,
   setDraftName,
   busy,
-  displayCode,
+  placeholder,
+  ariaLabel,
   onCommit,
   onCancel,
 }: {
@@ -586,7 +670,8 @@ function PosterRenameControls({
   draftName: string;
   setDraftName: (value: string) => void;
   busy: boolean;
-  displayCode: string;
+  placeholder: string;
+  ariaLabel: string;
   onCommit: () => void;
   onCancel: () => void;
 }) {
@@ -608,8 +693,8 @@ function PosterRenameControls({
             onCancel();
           }
         }}
-        placeholder={t("actions.rename-placeholder")}
-        aria-label={t("actions.rename-poster", { code: displayCode })}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
         disabled={busy}
         className="h-9 w-full max-w-sm"
       />
@@ -709,7 +794,8 @@ function PosterTreeItem({
               draftName={draftName}
               setDraftName={setDraftName}
               busy={busy}
-              displayCode={displayCode}
+              placeholder={t("actions.rename-placeholder")}
+              ariaLabel={t("actions.rename-poster", { code: displayCode })}
               onCommit={() => void commitRename()}
               onCancel={cancelRename}
             />
@@ -845,7 +931,8 @@ function PosterRow({
             draftName={draftName}
             setDraftName={setDraftName}
             busy={busy}
-            displayCode={displayCode}
+            placeholder={t("actions.rename-placeholder")}
+            ariaLabel={t("actions.rename-poster", { code: displayCode })}
             onCommit={() => void commitRename()}
             onCancel={cancelRename}
           />

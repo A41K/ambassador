@@ -20,6 +20,7 @@ import {
   getUserPendingPosters,
   listUserPosterGroups,
   listUserPosters,
+  updatePosterGroupName,
   updatePosterMetadata,
   updatePosterName,
   updatePosterProofAndVerification,
@@ -280,6 +281,17 @@ export async function renamePosterForUser(
   const normalized = normalizePosterName(name);
   const updated = await updatePosterName(poster.id, normalized);
   return { poster: toClientPoster(updated) };
+}
+
+export async function renamePosterGroupForUser(
+  userId: string,
+  groupId: string,
+  name: string | null,
+) {
+  const { group } = await getPosterGroupForUserOrThrow(userId, groupId);
+  const normalized = normalizePosterName(name);
+  const updated = await updatePosterGroupName(group.id, normalized);
+  return { group: updated };
 }
 
 export async function deletePosterForUser(userId: string, posterId: string) {
