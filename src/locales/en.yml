@@ -90,7 +90,7 @@ dashboard:
     title: "Complete onboarding first:"
     body-prefix: Finish
     body-link: ambassador onboarding
-    body-suffix: to unlock your office grant and shirt order.
+    body-suffix: to unlock your office grant and to order a shirt.
     cta: Complete onboarding
     disabled-title: "Onboarding is paused:"
     disabled-body: Ambassador onboarding is temporarily disabled. We will let you know when it's available again.
