@@ -291,7 +291,7 @@ referrals:
     email: Email
     hours-logged: Hours logged
     hours-approved: Hours approved
-    verification: Verification
+    verification: Status
     filter-label: Search referrals
     filter-placeholder: Search by code, name, or email
     status-filter-label: Filter by status
@@ -301,6 +301,7 @@ referrals:
     pagination-next: Next page
     pagination-range: "{from}–{to} of {total}"
     status:
+      rsvp: RSVP
       verified: Verified
       pending: Pending
       unverified: Unverified

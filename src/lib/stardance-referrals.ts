@@ -19,6 +19,7 @@ type StardanceUserCodeRow = {
 };
 
 export type StardanceReferralVerificationStatus =
+  | "rsvp"
   | "unverified"
   | "pending"
   | "verified"
@@ -582,6 +583,244 @@ type StardanceReferralRow = {
   poster_id: string | null;
   poster_name: string | null;
 };
+
+type StardanceRsvpReferralPayload = {
+  id: string;
+  email: string;
+  ref: string;
+  createdAt: string;
+};
+
+type StardanceRsvpReferralRow = {
+  id: string;
+  user_id: string;
+  referral_code_id: string;
+  name: string;
+  slack_id: string;
+  email: string;
+  hours_logged: number;
+  hours_approved: number;
+  verification_status: Extract<StardanceReferralVerificationStatus, "rsvp">;
+  referred_at: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseStardanceRsvpReferral(value: unknown) {
+  if (!isRecord(value)) return null;
+
+  const id = value.id;
+  const email = value.email;
+  const ref = value.ref;
+  const createdAt = value.created_at;
+
+  if (
+    (typeof id !== "string" && typeof id !== "number") ||
+    typeof email !== "string" ||
+    typeof ref !== "string" ||
+    typeof createdAt !== "string" ||
+    Number.isNaN(Date.parse(createdAt))
+  ) {
+    return null;
+  }
+
+  return {
+    id: String(id),
+    email,
+    ref,
+    createdAt,
+  } satisfies StardanceRsvpReferralPayload;
+}
+
+async function fetchStardanceRsvpReferralsForCode(
+  code: string,
+  apiKey: string,
+) {
+  const baseUrl = optionalEnv("STARDANCE_API_BASE_URL") ?? STARDANCE_BASE_URL;
+  const url = new URL(
+    `/api/v1/ambassador_referrals/${encodeURIComponent(`a-${code.toLowerCase()}`)}`,
+    baseUrl,
+  );
+
+  const response = await fetch(url, {
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      accept: "application/json",
+    },
+  });
+
+  if (response.status === 404) return [];
+
+  if (!response.ok) {
+    throw new Error(`Stardance RSVP API returned ${response.status}.`);
+  }
+
+  const body: unknown = await response.json();
+  const referrals = isRecord(body) && Array.isArray(body.referrals)
+    ? body.referrals
+    : [];
+
+  return referrals
+    .map(parseStardanceRsvpReferral)
+    .filter((referral): referral is StardanceRsvpReferralPayload => referral !== null);
+}
+
+async function fetchAllStardanceRsvpReferrals(apiKey: string) {
+  const baseUrl = optionalEnv("STARDANCE_API_BASE_URL") ?? STARDANCE_BASE_URL;
+  const url = new URL("/api/v1/ambassador_referrals", baseUrl);
+
+  const response = await fetch(url, {
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Stardance RSVP API returned ${response.status}.`);
+  }
+
+  const body: unknown = await response.json();
+  const referrals = isRecord(body) && Array.isArray(body.referrals)
+    ? body.referrals
+    : [];
+
+  return referrals
+    .map(parseStardanceRsvpReferral)
+    .filter((referral): referral is StardanceRsvpReferralPayload => referral !== null);
+}
+
+async function upsertStardanceRsvpReferralRows(rows: StardanceRsvpReferralRow[]) {
+  if (rows.length === 0) return;
+
+  await sql`
+    INSERT INTO stardance_referrals ${sql(rows)}
+    ON CONFLICT (id) DO UPDATE
+    SET
+      user_id = EXCLUDED.user_id,
+      referral_code_id = EXCLUDED.referral_code_id,
+      name = CASE
+        WHEN stardance_referrals.verification_status = 'rsvp' THEN EXCLUDED.name
+        ELSE stardance_referrals.name
+      END,
+      slack_id = CASE
+        WHEN stardance_referrals.verification_status = 'rsvp' THEN EXCLUDED.slack_id
+        ELSE stardance_referrals.slack_id
+      END,
+      email = CASE
+        WHEN stardance_referrals.verification_status = 'rsvp' THEN EXCLUDED.email
+        ELSE stardance_referrals.email
+      END,
+      hours_logged = CASE
+        WHEN stardance_referrals.verification_status = 'rsvp' THEN EXCLUDED.hours_logged
+        ELSE stardance_referrals.hours_logged
+      END,
+      hours_approved = CASE
+        WHEN stardance_referrals.verification_status = 'rsvp' THEN EXCLUDED.hours_approved
+        ELSE stardance_referrals.hours_approved
+      END,
+      verification_status = CASE
+        WHEN stardance_referrals.verification_status = 'rsvp' THEN EXCLUDED.verification_status
+        ELSE stardance_referrals.verification_status
+      END,
+      referred_at = CASE
+        WHEN stardance_referrals.verification_status = 'rsvp' THEN EXCLUDED.referred_at
+        ELSE stardance_referrals.referred_at
+      END
+  `;
+}
+
+export async function syncStardanceRsvpReferralsForUser(userId: string) {
+  const apiKey = optionalEnv("STARDANCE_API_KEY");
+  if (apiKey === null) return;
+
+  await getOrCreateDefaultStardanceReferralCodeRow(userId);
+
+  const codes = await sql<StardanceReferralCodeRow[]>`
+    SELECT *
+    FROM stardance_referral_codes
+    WHERE user_id = ${userId}
+    ORDER BY created_at ASC, id ASC
+  `;
+
+  if (codes.length === 0) return;
+
+  const rows: StardanceRsvpReferralRow[] = [];
+
+  await Promise.all(codes.map(async (code) => {
+    const referrals = await fetchStardanceRsvpReferralsForCode(code.code, apiKey);
+
+    for (const referral of referrals) {
+      if (referral.ref.toLowerCase() !== `a-${code.code.toLowerCase()}`) continue;
+
+      const email = referral.email.trim().toLowerCase();
+      if (email === "") continue;
+
+      rows.push({
+        id: `rsvp:${referral.id}`,
+        user_id: userId,
+        referral_code_id: code.id,
+        name: email,
+        slack_id: "",
+        email,
+        hours_logged: 0,
+        hours_approved: 0,
+        verification_status: "rsvp",
+        referred_at: new Date(referral.createdAt).toISOString(),
+      });
+    }
+  }));
+
+  await upsertStardanceRsvpReferralRows(rows);
+}
+
+export async function syncAllStardanceRsvpReferrals() {
+  const apiKey = optionalEnv("STARDANCE_API_KEY");
+  if (apiKey === null) {
+    return { processed: 0, insertedOrUpdated: 0 };
+  }
+
+  const codes = await sql<StardanceReferralCodeRow[]>`
+    SELECT *
+    FROM stardance_referral_codes
+  `;
+
+  if (codes.length === 0) {
+    return { processed: 0, insertedOrUpdated: 0 };
+  }
+
+  const codeByRef = new Map(
+    codes.map((code) => [`a-${code.code.toLowerCase()}`, code] as const),
+  );
+  const referrals = await fetchAllStardanceRsvpReferrals(apiKey);
+  const rows: StardanceRsvpReferralRow[] = [];
+
+  for (const referral of referrals) {
+    const code = codeByRef.get(referral.ref.toLowerCase());
+    if (code === undefined) continue;
+
+    const email = referral.email.trim().toLowerCase();
+    if (email === "") continue;
+
+    rows.push({
+      id: `rsvp:${referral.id}`,
+      user_id: code.user_id,
+      referral_code_id: code.id,
+      name: email,
+      slack_id: "",
+      email,
+      hours_logged: 0,
+      hours_approved: 0,
+      verification_status: "rsvp",
+      referred_at: new Date(referral.createdAt).toISOString(),
+    });
+  }
+
+  await upsertStardanceRsvpReferralRows(rows);
+  return { processed: referrals.length, insertedOrUpdated: rows.length };
+}
 
 export async function listStardanceReferralsForUser(
   userId: string,

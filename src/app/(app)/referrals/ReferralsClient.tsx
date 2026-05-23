@@ -40,6 +40,7 @@ type ReferralsClientProps = {
 };
 
 const VERIFICATION_TONES: Record<StardanceReferralVerificationStatus, string> = {
+  rsvp: "text-muted-foreground",
   verified: "text-acceptance",
   pending: "text-accent",
   unverified: "text-muted-foreground",
@@ -342,6 +343,7 @@ export function ReferralsClient({
                 <SelectContent align="end">
                   <SelectItem value="all">{t("table.status-filter-all")}</SelectItem>
                   <SelectItem value="verified">{t("table.status.verified")}</SelectItem>
+                  <SelectItem value="rsvp">{t("table.status.rsvp")}</SelectItem>
                   <SelectItem value="pending">{t("table.status.pending")}</SelectItem>
                   <SelectItem value="unverified">{t("table.status.unverified")}</SelectItem>
                 </SelectContent>

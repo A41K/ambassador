@@ -13,7 +13,7 @@ import {
   listArchivedStardanceReferralCodesForUser,
   listStardanceReferralCodesForUser,
   listStardanceReferralsForUser,
-  seedFakeStardanceReferralsForUser,
+  syncStardanceRsvpReferralsForUser,
 } from "@/lib/stardance-referrals";
 
 import { ReferralsClient } from "./ReferralsClient";
@@ -56,8 +56,13 @@ export default async function ReferralsPage() {
       isAdmin: canAccessAdmin,
     });
 
+  try {
+    await syncStardanceRsvpReferralsForUser(session.sub);
+  } catch (error) {
+    console.error("[stardance-referrals] unable to sync RSVP referrals", error);
+  }
+
   const referralCodes = await listStardanceReferralCodesForUser(session.sub);
-  await seedFakeStardanceReferralsForUser(session.sub);
   const [archivedReferralCodes, referrals] = await Promise.all([
     listArchivedStardanceReferralCodesForUser(session.sub),
     listStardanceReferralsForUser(session.sub),

@@ -12,7 +12,11 @@ export async function register() {
   const { startHcbGrantScheduler } = await import(
     "@/lib/hcb/grant-scheduler"
   );
+  const { startStardanceRsvpSyncScheduler } = await import(
+    "@/lib/stardance-rsvp-sync-scheduler"
+  );
 
   startAirtableSyncScheduler();
   startHcbGrantScheduler();
+  startStardanceRsvpSyncScheduler();
 }
