@@ -7,6 +7,7 @@ import { getTranslatedPageMetadata } from "@/i18n/metadata";
 import { ensureSchema } from "@/lib/database/ensure-schema";
 import { canAccessPosters, getPosterAccessState } from "@/lib/posters/access";
 import { listPosterCampaigns } from "@/lib/posters/config";
+import { getDefaultPaperSize, normalizeRegionCode } from "@/lib/posters/paper-size";
 import { listPosterDataForUser } from "@/lib/posters/service";
 import { getEffectiveSafeguards } from "@/lib/safeguards";
 import { getSession } from "@/lib/session";
@@ -94,6 +95,8 @@ export default async function PostersPage() {
           initialCampaignSlug={campaigns[0]?.slug ?? null}
           campaigns={campaigns}
           initialData={data}
+          defaultPaperSize={getDefaultPaperSize(user.country_code, user.ambassador_region)}
+          defaultRegionCode={normalizeRegionCode(user.country_code)}
         />
       </div>
     </main>

@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     const result = await createPosterGroupForUser({
       userId: session.sub,
       campaignSlug: typeof payload?.campaignSlug === "string" ? payload.campaignSlug : undefined,
-      count: typeof payload?.count === "number" && Number.isFinite(payload.count) ? payload.count : 1,
+      count: typeof payload?.count === "number" && Number.isFinite(payload.count) ? payload.count : 0,
       name: typeof payload?.name === "string" ? payload.name : undefined,
       charset: typeof payload?.charset === "string" ? payload.charset : undefined,
       posterType: typeof payload?.posterType === "string" ? payload.posterType : undefined,

@@ -8,7 +8,7 @@ import {
   resolvePosterTemplatePath,
 } from "@/lib/posters/config";
 import { createQrCodeMatrix, generateQrCodePng } from "@/lib/posters/qr";
-import type { PosterRow, PosterStyle, PosterTemplateCoordinates } from "@/lib/posters/types";
+import { getPosterStyleBase, type PosterRow, type PosterStyle, type PosterTemplateCoordinates } from "@/lib/posters/types";
 
 function hexToRgb(hexColor: string) {
   const clean = hexColor.replace(/^#/, "");
@@ -19,7 +19,8 @@ function hexToRgb(hexColor: string) {
 }
 
 function shouldDrawVectorQrCode(style: PosterStyle) {
-  return style === "bw" || style === "printer_efficient" || style === "a4_bw";
+  const base = getPosterStyleBase(style);
+  return base === "bw" || base === "printer_efficient" || base === "a4_bw";
 }
 
 function drawVectorQrCode(

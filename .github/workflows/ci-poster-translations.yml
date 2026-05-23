@@ -1,0 +1,83 @@
+name: "ci: poster translations"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-translations:
+    if: contains(github.event.pull_request.labels.*.name, 'Translation')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate regional poster files
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+
+          shopt -s nullglob
+          campaign_dirs=(public/posters/*/regionals)
+          if [ ${#campaign_dirs[@]} -eq 0 ]; then
+            echo "::error::No public/posters/*/regionals directory exists. Add translated posters there."
+            exit 1
+          fi
+
+          for regionals_dir in "${campaign_dirs[@]}"; do
+            campaign="${regionals_dir%/regionals}"
+            campaign_slug="${campaign##*/}"
+            echo "Checking campaign: $campaign_slug"
+
+            mapfile -t region_codes < <(
+              find "$regionals_dir" -maxdepth 1 -type f \
+                \( -name 'stardance-*.pdf' -o -name 'stardance-*.webp' \) \
+                -printf '%f\n' \
+              | sed -E 's/^stardance-(letter|a4)-(color|bw)-([a-z]{2,8})\.(pdf|webp)$/\3/' \
+              | grep -E '^[a-z]{2,8}$' \
+              | sort -u
+            )
+
+            if [ ${#region_codes[@]} -eq 0 ]; then
+              echo "::warning::No regional posters found in $regionals_dir."
+              continue
+            fi
+
+            for region in "${region_codes[@]}"; do
+              echo "  region: $region"
+              for paper in letter a4; do
+                for color in color bw; do
+                  for ext in pdf webp; do
+                    file="$regionals_dir/stardance-${paper}-${color}-${region}.${ext}"
+                    if [ ! -f "$file" ]; then
+                      echo "::error file=$file::Missing $file"
+                      fail=1
+                    fi
+                  done
+                done
+              done
+            done
+
+            # Reject any file that doesn't match the naming scheme.
+            mapfile -t stray < <(
+              find "$regionals_dir" -maxdepth 1 -type f \
+                ! -regex '.*/stardance-\(letter\|a4\)-\(color\|bw\)-[a-z]\{2,8\}\.\(pdf\|webp\)$' \
+                -printf '%p\n' \
+              | sort
+            )
+            for file in "${stray[@]}"; do
+              echo "::error file=$file::File does not follow stardance-(letter|a4)-(color|bw)-<region>.(pdf|webp) naming"
+              fail=1
+            done
+          done
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Poster translation validation failed. Each region needs the 4 PDFs and 4 .webp previews."
+            exit 1
+          fi
+          echo "Poster translation validation passed."

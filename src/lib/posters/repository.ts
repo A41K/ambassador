@@ -306,6 +306,16 @@ export async function countUserPosters(userId: string) {
   return Number.parseInt(row?.count ?? "0", 10);
 }
 
+export async function countUserPosterGroups(userId: string) {
+  const row = (await sql<{ count: string }[]>`
+    SELECT COUNT(*)::text AS count
+    FROM poster_groups
+    WHERE user_id = ${userId}
+  `).at(0);
+
+  return Number.parseInt(row?.count ?? "0", 10);
+}
+
 export async function findPosterForUser(userId: string, posterId: string) {
   const poster = (await sql<PosterRow[]>`
     SELECT *
@@ -463,6 +473,55 @@ export async function updatePosterName(posterId: string, name: string | null) {
   `;
 
   return poster;
+}
+
+export async function movePosterToGroup(
+  posterId: string,
+  nextGroupId: string | null,
+) {
+  return sql.begin(async (tx) => {
+    const [current] = await tx<{ poster_group_id: string | null }[]>`
+      SELECT poster_group_id
+      FROM posters
+      WHERE id = ${posterId}
+      FOR UPDATE
+    `;
+    if (!current) {
+      return null;
+    }
+
+    const previousGroupId = current.poster_group_id;
+    if (previousGroupId === nextGroupId) {
+      const [unchanged] = await tx<PosterRow[]>`
+        SELECT * FROM posters WHERE id = ${posterId}
+      `;
+      return unchanged ?? null;
+    }
+
+    const [poster] = await tx<PosterRow[]>`
+      UPDATE posters
+      SET poster_group_id = ${nextGroupId}, updated_at = NOW()
+      WHERE id = ${posterId}
+      RETURNING *
+    `;
+
+    if (previousGroupId !== null) {
+      await tx`
+        UPDATE poster_groups
+        SET poster_count = GREATEST(poster_count - 1, 0), updated_at = NOW()
+        WHERE id = ${previousGroupId}
+      `;
+    }
+    if (nextGroupId !== null) {
+      await tx`
+        UPDATE poster_groups
+        SET poster_count = poster_count + 1, updated_at = NOW()
+        WHERE id = ${nextGroupId}
+      `;
+    }
+
+    return poster ?? null;
+  });
 }
 
 export async function updatePosterGroupName(groupId: string, name: string | null) {

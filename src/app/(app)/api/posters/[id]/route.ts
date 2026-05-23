@@ -1,6 +1,7 @@
 import {
   deletePosterForUser,
   getPosterForUserOrThrow,
+  movePosterForUser,
   renamePosterForUser,
 } from "@/lib/posters/service";
 import { isSameOriginRequest, posterErrorResponse, requirePosterSession } from "@/lib/posters/http";
@@ -36,7 +37,24 @@ export async function PATCH(request: Request, context: RouteContext<"/api/poster
     }
 
     const { id } = await context.params;
-    const body = (await request.json().catch(() => null)) as { name?: unknown } | null;
+    const body = (await request.json().catch(() => null)) as {
+      name?: unknown;
+      groupId?: unknown;
+    } | null;
+
+    if (body !== null && "groupId" in body) {
+      const rawGroupId = body.groupId;
+      if (rawGroupId !== null && typeof rawGroupId !== "string") {
+        return Response.json({ error: "Invalid groupId." }, { status: 400 });
+      }
+      const result = await movePosterForUser({
+        userId: session.sub,
+        posterId: id,
+        groupId: typeof rawGroupId === "string" && rawGroupId.trim() !== "" ? rawGroupId : null,
+      });
+      return Response.json(result);
+    }
+
     const rawName = body?.name;
     if (rawName !== null && typeof rawName !== "string" && rawName !== undefined) {
       return Response.json({ error: "Invalid name." }, { status: 400 });

@@ -1,4 +1,5 @@
 export const POSTER_STYLES = ["color", "bw", "printer_efficient", "a4", "a4_bw"] as const;
+export const POSTER_REGION_CODE_PATTERN = /^[a-z]{2,8}$/;
 export const POSTER_VERIFICATION_STATUSES = [
   "pending",
   "in_review",
@@ -12,9 +13,36 @@ export const MAX_POSTERS_PER_GROUP = 20;
 export const MAX_POSTERS_PER_USER = 5000;
 export const REFERRAL_CODE_LENGTH = 5;
 
-export type PosterStyle = (typeof POSTER_STYLES)[number];
+export type PosterStyleBase = (typeof POSTER_STYLES)[number];
+export type PosterStyle = PosterStyleBase | `${PosterStyleBase}:${string}`;
 export type PosterVerificationStatus = (typeof POSTER_VERIFICATION_STATUSES)[number];
 export type PosterGroupCharset = (typeof POSTER_GROUP_CHARSETS)[number];
+
+export function isPosterStyleBase(value: unknown): value is PosterStyleBase {
+  return typeof value === "string" && (POSTER_STYLES as readonly string[]).includes(value);
+}
+
+export function parsePosterStyle(
+  value: string,
+): { base: PosterStyleBase; region: string | null } | null {
+  const colonIndex = value.indexOf(":");
+  if (colonIndex === -1) {
+    return isPosterStyleBase(value) ? { base: value, region: null } : null;
+  }
+  const base = value.slice(0, colonIndex);
+  const region = value.slice(colonIndex + 1);
+  if (!isPosterStyleBase(base)) return null;
+  if (!POSTER_REGION_CODE_PATTERN.test(region)) return null;
+  return { base, region };
+}
+
+export function formatPosterStyle(base: PosterStyleBase, region: string | null): PosterStyle {
+  return region === null ? base : (`${base}:${region}` as PosterStyle);
+}
+
+export function getPosterStyleBase(value: string): PosterStyleBase | null {
+  return parsePosterStyle(value)?.base ?? null;
+}
 
 export type PosterMetadata = Record<string, unknown>;
 

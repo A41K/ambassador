@@ -9,6 +9,7 @@ import {
   createPoster,
   createPosterGroup,
   createPostersForGroup,
+  countUserPosterGroups,
   countUserPosters,
   deletePosterById,
   deletePosterGroupById,
@@ -20,6 +21,7 @@ import {
   getUserPendingPosters,
   listUserPosterGroups,
   listUserPosters,
+  movePosterToGroup,
   updatePosterGroupName,
   updatePosterMetadata,
   updatePosterName,
@@ -31,6 +33,7 @@ import { PosterRequestError } from "@/lib/posters/http";
 import {
   MAX_POSTERS_PER_GROUP,
   MAX_POSTERS_PER_USER,
+  parsePosterStyle,
   type CreatePosterGroupInput,
   type CreatePosterInput,
   type PosterGroupCharset,
@@ -44,7 +47,7 @@ import {
 const MAX_POSTER_NAME_LENGTH = 80;
 
 function isPosterStyle(value: string | null | undefined): value is PosterStyle {
-  return value === "color" || value === "bw" || value === "printer_efficient" || value === "a4" || value === "a4_bw";
+  return typeof value === "string" && parsePosterStyle(value) !== null;
 }
 
 function isPosterGroupCharset(value: string | null | undefined): value is PosterGroupCharset {
@@ -207,12 +210,18 @@ export async function createPosterGroupForUser(
     charset?: string | null;
   },
 ) {
-  const existingCount = await countUserPosters(input.userId);
-  const remaining = MAX_POSTERS_PER_USER - existingCount;
-  if (remaining <= 0) {
+  const [existingPosterCount, existingGroupCount] = await Promise.all([
+    countUserPosters(input.userId),
+    countUserPosterGroups(input.userId),
+  ]);
+  if (existingGroupCount >= 300) {
+    throw new PosterRequestError("You can have at most 300 poster groups.", 400);
+  }
+  const remaining = MAX_POSTERS_PER_USER - existingPosterCount;
+  if (input.count > 0 && remaining <= 0) {
     throw new PosterRequestError(`You can have at most ${MAX_POSTERS_PER_USER} posters.`, 400);
   }
-  const count = Math.min(Math.max(input.count, 1), MAX_POSTERS_PER_GROUP, remaining);
+  const count = Math.min(Math.max(input.count, 0), MAX_POSTERS_PER_GROUP, Math.max(remaining, 0));
   const campaignSlug = normalizeCampaignSlug(input.campaignSlug);
   const posterType = isPosterStyle(input.posterType) ? input.posterType : "color";
   const charset = isPosterGroupCharset(input.charset) ? input.charset : "alphanumeric";
@@ -280,6 +289,32 @@ export async function renamePosterForUser(
   const poster = await getPosterForUserOrThrow(userId, posterId);
   const normalized = normalizePosterName(name);
   const updated = await updatePosterName(poster.id, normalized);
+  return { poster: toClientPoster(updated) };
+}
+
+export async function movePosterForUser(input: {
+  userId: string;
+  posterId: string;
+  groupId: string | null;
+}) {
+  const poster = await getPosterForUserOrThrow(input.userId, input.posterId);
+
+  if (input.groupId !== null) {
+    const { group, posters } = await getPosterGroupForUserOrThrow(input.userId, input.groupId);
+    if (poster.poster_group_id !== group.id) {
+      if (posters.length >= MAX_POSTERS_PER_GROUP) {
+        throw new PosterRequestError(
+          `Poster groups can have at most ${MAX_POSTERS_PER_GROUP} posters.`,
+          400,
+        );
+      }
+    }
+  }
+
+  const updated = await movePosterToGroup(poster.id, input.groupId);
+  if (!updated) {
+    throw new PosterRequestError("Poster not found.", 404);
+  }
   return { poster: toClientPoster(updated) };
 }
 

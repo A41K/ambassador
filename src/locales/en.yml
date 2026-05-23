@@ -149,6 +149,8 @@ posters:
     cta: Scan a poster
   sections:
     new: New posters
+    yours: Your posters
+    ungrouped: Ungrouped
   group-card:
     add-button: "Add posters ({remaining} allowed)"
     add-count-label: How many posters to add?
@@ -194,6 +196,7 @@ posters:
     rename-save: Save
     rename-cancel: Cancel
     rename-placeholder: Poster name
+    move-poster: "Drag poster {code} to a group"
   groups:
     title: Poster groups
     empty: No groups yet. Create one to bundle multiple posters.
@@ -201,8 +204,8 @@ posters:
     unnamed: Untitled group
     name-placeholder: Group name (optional)
     size-label: How many posters?
-    size-help: Enter a whole number from 1 to 20.
-    size-invalid: Use a whole number from 1 to 20. The value will be adjusted to {count}.
+    size-help: Enter a whole number from 0 to 20.
+    size-invalid: Use a whole number from 0 to 20. The value will be adjusted to {count}.
   singles:
     title: Standalone posters
     empty: No standalone posters yet.
@@ -245,6 +248,7 @@ posters:
     geolocation-denied: Precise location access was denied. Please enable it in your browser settings.
     rename-failed: Could not rename poster.
     rename-group-failed: Could not rename group.
+    move-failed: Could not move poster.
 
 referrals:
   metadata:

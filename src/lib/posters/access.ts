@@ -10,6 +10,8 @@ export type PosterAccessState = {
   latest_application_status?: string | null;
   latest_application_airtable_record_id?: string | null;
   latest_application_airtable_payload?: unknown;
+  country_code?: string | null;
+  ambassador_region?: string | null;
   is_onboarding_complete: boolean;
 };
 
@@ -19,6 +21,8 @@ export async function getPosterAccessState(userId: string): Promise<PosterAccess
       users.balance_cents,
       users.is_admin,
       users.manual_dashboard_state,
+      users.country_code,
+      users.ambassador_region,
       latest_application.status AS latest_application_status,
       latest_application.airtable_record_id AS latest_application_airtable_record_id,
       latest_application.airtable_payload AS latest_application_airtable_payload

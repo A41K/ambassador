@@ -2,10 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { optionalEnv } from "@/lib/env";
-import type {
-  PosterStyle,
-  PosterTemplateCoordinates,
-  PosterTemplateTextCoordinates,
+import {
+  formatPosterStyle,
+  parsePosterStyle,
+  type PosterStyle,
+  type PosterStyleBase,
+  type PosterTemplateCoordinates,
+  type PosterTemplateTextCoordinates,
 } from "@/lib/posters/types";
 
 const DEFAULT_CURRENT_DOMAIN = "http://localhost:7171";
@@ -17,18 +20,39 @@ export const DEFAULT_POSTER_CAMPAIGN = optionalEnv("POSTER_DEFAULT_CAMPAIGN") ??
 type PosterCampaignConfigFile = {
   displayName?: string;
   redirectBaseUrl?: string;
-  templates?: Partial<Record<PosterStyle, string>>;
-  qrCoordinates?: Partial<Record<PosterStyle, Partial<PosterTemplateCoordinates>>>;
-  referralTextCoordinates?: Partial<Record<PosterStyle, Partial<PosterTemplateTextCoordinates>>>;
+  templates?: Partial<Record<string, string>>;
+  regions?: Partial<Record<string, string>>;
+  qrCoordinates?: Partial<Record<string, Partial<PosterTemplateCoordinates>>>;
+  referralTextCoordinates?: Partial<Record<string, Partial<PosterTemplateTextCoordinates>>>;
 };
 
-const defaultTemplateFilenames: Record<PosterStyle, string> = {
+const defaultTemplateFilenames: Record<PosterStyleBase, string> = {
   color: "stardance.pdf",
   bw: "stardance-bw.pdf",
   printer_efficient: "stardance-bw.pdf",
   a4: "stardance-a4.pdf",
   a4_bw: "stardance-a4-bw.pdf",
 };
+
+const REGIONAL_PAPER: Record<PosterStyleBase, "letter" | "a4"> = {
+  color: "letter",
+  bw: "letter",
+  printer_efficient: "letter",
+  a4: "a4",
+  a4_bw: "a4",
+};
+
+const REGIONAL_COLOR: Record<PosterStyleBase, "color" | "bw"> = {
+  color: "color",
+  bw: "bw",
+  printer_efficient: "bw",
+  a4: "color",
+  a4_bw: "bw",
+};
+
+function regionalTemplateFilename(base: PosterStyleBase, region: string) {
+  return `regionals/stardance-${REGIONAL_PAPER[base]}-${REGIONAL_COLOR[base]}-${region}.pdf`;
+}
 
 function posterTemplateRoots() {
   return [
@@ -105,7 +129,15 @@ function defaultRenderCoordinates(pageWidth: number, pageHeight: number) {
 export function resolvePosterTemplatePath(campaignSlug: string, style: PosterStyle) {
   const slug = normalizeCampaignSlug(campaignSlug);
   const config = readPosterCampaignConfig(slug);
-  const filename = config.templates?.[style] ?? defaultTemplateFilenames[style];
+  const parsed = parsePosterStyle(style);
+  if (parsed === null) return null;
+  const { base, region } = parsed;
+
+  const filename =
+    config.templates?.[style] ??
+    (region !== null
+      ? regionalTemplateFilename(base, region)
+      : defaultTemplateFilenames[base]);
 
   for (const root of posterTemplateRoots()) {
     const campaignTemplate = path.join(root, slug, filename);
@@ -113,7 +145,7 @@ export function resolvePosterTemplatePath(campaignSlug: string, style: PosterSty
       return campaignTemplate;
     }
 
-    const defaultTemplate = path.join(root, DEFAULT_POSTER_CAMPAIGN, defaultTemplateFilenames[style]);
+    const defaultTemplate = path.join(root, DEFAULT_POSTER_CAMPAIGN, defaultTemplateFilenames[base]);
     if (fs.existsSync(defaultTemplate)) {
       return defaultTemplate;
     }
@@ -130,8 +162,11 @@ export function getPosterRenderConfig(
 ) {
   const defaults = defaultRenderCoordinates(pageWidth, pageHeight);
   const config = readPosterCampaignConfig(normalizeCampaignSlug(campaignSlug));
-  const qrOverrides = config.qrCoordinates?.[style] ?? {};
-  const textOverrides = config.referralTextCoordinates?.[style] ?? {};
+  const parsed = parsePosterStyle(style);
+  const base: string = parsed?.base ?? style;
+  const qrOverrides = config.qrCoordinates?.[style] ?? config.qrCoordinates?.[base] ?? {};
+  const textOverrides =
+    config.referralTextCoordinates?.[style] ?? config.referralTextCoordinates?.[base] ?? {};
 
   return {
     qr: {
@@ -171,14 +206,61 @@ export function buildPosterScanUrl(qrCodeToken: string) {
   return `${optionalEnv("CURRENT_DOMAIN") ?? DEFAULT_CURRENT_DOMAIN}/p/${encodeURIComponent(qrCodeToken)}`;
 }
 
+export type PosterRegionInfo = {
+  code: string;
+  name: string;
+};
+
 export type PosterCampaignSummary = {
   slug: string;
   displayName: string;
   styles: PosterStyle[];
+  regions: PosterRegionInfo[];
   previewUrls: Partial<Record<PosterStyle, string>>;
 };
 
-const AVAILABLE_STYLES: PosterStyle[] = ["color", "bw", "a4", "a4_bw"];
+const AVAILABLE_STYLES: PosterStyleBase[] = ["color", "bw", "a4", "a4_bw"];
+
+function encodeStylePath(slug: string, filename: string) {
+  const parts = filename.split("/").map((segment) => encodeURIComponent(segment));
+  return `/posters/${encodeURIComponent(slug)}/${parts.join("/")}`;
+}
+
+function previewFilename(templateFilename: string) {
+  return templateFilename.replace(/\.pdf$/i, ".webp");
+}
+
+function discoverRegionalCodes(campaignDir: string) {
+  const regionalsDir = path.join(campaignDir, "regionals");
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(regionalsDir);
+  } catch {
+    return [] as string[];
+  }
+  const codes = new Set<string>();
+  for (const entry of entries) {
+    const match = /^stardance-(?:letter|a4)-(?:color|bw)-([a-z]{2,8})\.pdf$/i.exec(entry);
+    if (match) {
+      codes.add(match[1].toLowerCase());
+    }
+  }
+  return [...codes].sort();
+}
+
+const DISPLAY_NAMES_BY_REGION_CODE: Record<string, string> = {
+  in: "India",
+  us: "United States",
+  ca: "Canada",
+  uk: "United Kingdom",
+  au: "Australia",
+  nz: "New Zealand",
+};
+
+function regionDisplayName(code: string, override?: string) {
+  if (override !== undefined && override.trim() !== "") return override;
+  return DISPLAY_NAMES_BY_REGION_CODE[code] ?? code.toUpperCase();
+}
 
 export function listPosterCampaigns(): PosterCampaignSummary[] {
   const seen = new Map<string, PosterCampaignSummary>();
@@ -203,11 +285,29 @@ export function listPosterCampaigns(): PosterCampaignSummary[] {
       if (!stat.isDirectory()) continue;
 
       const config = readPosterCampaignConfig(slug);
-      const styles = AVAILABLE_STYLES.filter((style) => {
-        const filename = config.templates?.[style] ?? defaultTemplateFilenames[style];
+
+      const englishStyles: PosterStyle[] = AVAILABLE_STYLES.filter((base) => {
+        const filename = config.templates?.[base] ?? defaultTemplateFilenames[base];
         return fs.existsSync(path.join(campaignDir, filename));
       });
 
+      const discoveredCodes = discoverRegionalCodes(campaignDir);
+      const regions: PosterRegionInfo[] = discoveredCodes.map((code) => ({
+        code,
+        name: regionDisplayName(code, config.regions?.[code]),
+      }));
+
+      const regionalStyles: PosterStyle[] = [];
+      for (const region of regions) {
+        for (const base of AVAILABLE_STYLES) {
+          const filename = regionalTemplateFilename(base, region.code);
+          if (fs.existsSync(path.join(campaignDir, filename))) {
+            regionalStyles.push(formatPosterStyle(base, region.code));
+          }
+        }
+      }
+
+      const styles = [...englishStyles, ...regionalStyles];
       if (styles.length === 0) continue;
 
       const displayName =
@@ -217,15 +317,20 @@ export function listPosterCampaigns(): PosterCampaignSummary[] {
 
       const previewUrls = Object.fromEntries(
         styles.flatMap((style) => {
-          const filename = config.templates?.[style] ?? defaultTemplateFilenames[style];
-          const previewFilename = filename.replace(/\.pdf$/i, ".webp");
-          const publicPreview = path.join(publicPosterRoot, slug, previewFilename);
-          if (!fs.existsSync(publicPreview)) return [];
-          return [[style, `/posters/${encodeURIComponent(slug)}/${encodeURIComponent(previewFilename)}`]];
+          const parsed = parsePosterStyle(style);
+          if (parsed === null) return [];
+          const filename =
+            config.templates?.[style] ??
+            (parsed.region !== null
+              ? regionalTemplateFilename(parsed.base, parsed.region)
+              : defaultTemplateFilenames[parsed.base]);
+          const preview = previewFilename(filename);
+          if (!fs.existsSync(path.join(publicPosterRoot, slug, preview))) return [];
+          return [[style, encodeStylePath(slug, preview)]];
         }),
       ) as Partial<Record<PosterStyle, string>>;
 
-      seen.set(slug, { slug, displayName, styles, previewUrls });
+      seen.set(slug, { slug, displayName, styles, regions, previewUrls });
     }
   }
 

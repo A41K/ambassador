@@ -1,14 +1,19 @@
 "use client";
 
 import Icon from "@hackclub/icons";
-import { ChevronDown, Pencil, SwitchCamera, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Pencil, Search, SwitchCamera, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -17,17 +22,38 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { PosterCampaignSummary } from "@/lib/posters/config";
-import type { PosterStyle, PosterVerificationStatus } from "@/lib/posters/types";
+import {
+  formatPosterStyle,
+  parsePosterStyle,
+  type PosterStyle,
+  type PosterStyleBase,
+  type PosterVerificationStatus,
+} from "@/lib/posters/types";
 import { cn } from "@/lib/utils";
 
 type PaperSize = "letter" | "a4";
 type ColorMode = "color" | "bw";
 
-function toPosterStyle(size: PaperSize, color: ColorMode): PosterStyle {
+const REGION_DEFAULT_VALUE = "__default__";
+
+function toPosterStyleBase(size: PaperSize, color: ColorMode): PosterStyleBase {
   if (size === "a4" && color === "bw") return "a4_bw";
   if (size === "a4") return "a4";
   if (color === "bw") return "bw";
   return "color";
+}
+
+function toPosterStyle(
+  size: PaperSize,
+  color: ColorMode,
+  regionCode: string | null,
+): PosterStyle {
+  return formatPosterStyle(toPosterStyleBase(size, color), regionCode);
+}
+
+function variantLabel(color: ColorMode, regionName: string | null) {
+  const base = color === "color" ? "Color" : "B&W";
+  return regionName === null ? base : `${base} (${regionName})`;
 }
 
 function formatPosterCode(code: string) {
@@ -92,14 +118,10 @@ type VerifyTarget =
   | { kind: "group"; group: ClientPosterGroup };
 
 const POSTER_STYLES: PosterStyle[] = ["color", "bw", "a4", "a4_bw"];
-const PAPER_SIZE_OPTIONS: { value: PaperSize; label: string }[] = [
-  { value: "letter", label: "Letter" },
-  { value: "a4", label: "A4" },
-];
-const COLOR_MODE_OPTIONS: { value: ColorMode; label: string }[] = [
-  { value: "color", label: "Colour" },
-  { value: "bw", label: "B&W" },
-];
+const PAPER_SIZE_LABELS: Record<PaperSize, string> = {
+  letter: "Letter",
+  a4: "A4",
+};
 const SUPPORTED_PROOF_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".heic", ".heif", ".webp"];
 const SUPPORTED_PROOF_IMAGE_MIME_TYPES = new Set([
   "image/png",
@@ -117,8 +139,8 @@ function parseGroupSizeInput(value: string) {
 }
 
 function clampGroupSize(parsed: number | null) {
-  if (parsed === null) return 1;
-  return Math.max(1, Math.min(20, parsed));
+  if (parsed === null) return 0;
+  return Math.max(0, Math.min(20, parsed));
 }
 
 function clampGroupSizeInput(value: string) {
@@ -143,17 +165,75 @@ export function PostersClient({
   campaigns,
   initialCampaignSlug,
   initialData,
+  defaultPaperSize,
+  defaultRegionCode,
 }: {
   campaigns: PosterCampaignSummary[];
   initialCampaignSlug: string | null;
   initialData: ClientPosterData;
+  defaultPaperSize: PaperSize;
+  defaultRegionCode: string | null;
 }) {
   const t = useTranslations("posters");
   const router = useRouter();
   const data = initialData;
   const [campaignSlug, setCampaignSlug] = useState<string | null>(initialCampaignSlug);
-  const [paperSize, setPaperSize] = useState<PaperSize>("letter");
-  const [colorMode, setColorMode] = useState<ColorMode>("color");
+  const [paperSize, setPaperSizeState] = useState<PaperSize>(defaultPaperSize);
+  const [colorMode, setColorModeState] = useState<ColorMode>("color");
+  const [regionCode, setRegionCodeState] = useState<string | null>(defaultRegionCode);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const storedSize = window.localStorage.getItem("posters:paperSize");
+      if (storedSize === "letter" || storedSize === "a4") {
+        setPaperSizeState(storedSize);
+      }
+      const storedColor = window.localStorage.getItem("posters:colorMode");
+      if (storedColor === "color" || storedColor === "bw") {
+        setColorModeState(storedColor);
+      }
+      const storedRegion = window.localStorage.getItem("posters:regionCode");
+      if (storedRegion !== null && storedRegion !== "" && storedRegion !== REGION_DEFAULT_VALUE) {
+        setRegionCodeState(storedRegion);
+      }
+    } catch {
+      // ignore storage errors (private mode, quota, etc.)
+    }
+  }, []);
+
+  const setPaperSize = useCallback((next: PaperSize) => {
+    setPaperSizeState(next);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem("posters:paperSize", next);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const setColorMode = useCallback((next: ColorMode) => {
+    setColorModeState(next);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem("posters:colorMode", next);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const setRegionCode = useCallback((next: string | null) => {
+    setRegionCodeState(next);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem("posters:regionCode", next ?? "");
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
   const [posterName, setPosterName] = useState("");
   const [groupName, setGroupName] = useState("");
   const [groupSizeInput, setGroupSizeInput] = useState("3");
@@ -161,42 +241,88 @@ export function PostersClient({
   const [error, setError] = useState<string | null>(null);
   const [verifyTarget, setVerifyTarget] = useState<VerifyTarget | null>(null);
   const [showGroups, setShowGroups] = useState(true);
-  const [showStandalone, setShowStandalone] = useState(true);
 
   const campaign = useMemo(
     () => campaigns.find((c) => c.slug === campaignSlug) ?? null,
     [campaigns, campaignSlug],
   );
   const availableStyles = campaign?.styles ?? POSTER_STYLES;
+  const campaignRegions = useMemo(() => campaign?.regions ?? [], [campaign]);
+
+  const parsedStyles = useMemo(
+    () =>
+      availableStyles.flatMap((style) => {
+        const parsed = parsePosterStyle(style);
+        return parsed === null ? [] : [parsed];
+      }),
+    [availableStyles],
+  );
 
   const availableSizes = useMemo<PaperSize[]>(() => {
-    const sizes: PaperSize[] = [];
-    if (availableStyles.some((s) => s === "color" || s === "bw")) sizes.push("letter");
-    if (availableStyles.some((s) => s === "a4" || s === "a4_bw")) sizes.push("a4");
-    return sizes;
-  }, [availableStyles]);
+    const sizes = new Set<PaperSize>();
+    for (const { base } of parsedStyles) {
+      if (base === "color" || base === "bw") sizes.add("letter");
+      if (base === "a4" || base === "a4_bw") sizes.add("a4");
+    }
+    return [...sizes];
+  }, [parsedStyles]);
 
-  const availableColors = useMemo<ColorMode[]>(() => {
-    const colors: ColorMode[] = [];
-    if (availableStyles.some((s) => s === "color" || s === "a4")) colors.push("color");
-    if (availableStyles.some((s) => s === "bw" || s === "a4_bw")) colors.push("bw");
-    return colors;
-  }, [availableStyles]);
+  const availableVariants = useMemo<VariantOption[]>(() => {
+    const present = new Set<string>();
+    for (const { base, region } of parsedStyles) {
+      const variantColor: ColorMode = base === "bw" || base === "a4_bw" ? "bw" : "color";
+      present.add(`${variantColor}|${region ?? ""}`);
+    }
+    const englishOptions: VariantOption[] = [];
+    const regionalOptions: VariantOption[] = [];
 
-  const posterType = toPosterStyle(paperSize, colorMode);
-  const posterPreviewUrl = campaign?.previewUrls[posterType] ?? null;
+    for (const color of ["color", "bw"] as ColorMode[]) {
+      if (present.has(`${color}|`)) {
+        englishOptions.push({
+          key: `${color}|`,
+          colorMode: color,
+          regionCode: null,
+          regionName: null,
+          label: variantLabel(color, null),
+        });
+      }
+    }
+    for (const region of campaignRegions) {
+      for (const color of ["color", "bw"] as ColorMode[]) {
+        if (present.has(`${color}|${region.code}`)) {
+          regionalOptions.push({
+            key: `${color}|${region.code}`,
+            colorMode: color,
+            regionCode: region.code,
+            regionName: region.name,
+            label: variantLabel(color, region.name),
+          });
+        }
+      }
+    }
+    return [...englishOptions, ...regionalOptions];
+  }, [parsedStyles, campaignRegions]);
+
+  const activeVariantKey = `${colorMode}|${regionCode ?? ""}`;
+  const variantExists = availableVariants.some((v) => v.key === activeVariantKey);
 
   useEffect(() => {
     if (!availableSizes.includes(paperSize)) {
-      setPaperSize(availableSizes[0] ?? "letter");
+      setPaperSizeState(availableSizes[0] ?? "letter");
     }
   }, [availableSizes, paperSize]);
 
   useEffect(() => {
-    if (!availableColors.includes(colorMode)) {
-      setColorMode(availableColors[0] ?? "color");
+    if (availableVariants.length === 0) return;
+    if (!variantExists) {
+      const fallback = availableVariants[0];
+      setColorModeState(fallback.colorMode);
+      setRegionCodeState(fallback.regionCode);
     }
-  }, [availableColors, colorMode]);
+  }, [availableVariants, variantExists]);
+
+  const posterType = toPosterStyle(paperSize, colorMode, regionCode);
+  const posterPreviewUrl = campaign?.previewUrls[posterType] ?? null;
 
   const refresh = useCallback(async () => {
     router.refresh();
@@ -291,7 +417,30 @@ export function PostersClient({
   const verifiedCount = allPosters.filter((p) => p.verification_status === "success").length;
   const totalPosters = allPosters.length;
 
+  const [draggingPosterId, setDraggingPosterId] = useState<string | null>(null);
+  const movePoster = useCallback(
+    async (posterId: string, targetGroupId: string | null) => {
+      try {
+        await movePosterRequest(posterId, targetGroupId);
+        await refresh();
+      } catch {
+        setError(t("errors.move-failed"));
+      }
+    },
+    [refresh, t],
+  );
+  const dragContextValue = useMemo<PosterDragContextValue>(
+    () => ({
+      draggingPosterId,
+      beginDrag: (id) => setDraggingPosterId(id),
+      endDrag: () => setDraggingPosterId(null),
+      onMovePoster: movePoster,
+    }),
+    [draggingPosterId, movePoster],
+  );
+
   return (
+    <PosterDragContext.Provider value={dragContextValue}>
     <div className="space-y-10 pb-16">
       {error !== null ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
 
@@ -339,11 +488,13 @@ export function PostersClient({
             campaignSlug={campaignSlug}
             setCampaignSlug={setCampaignSlug}
             availableSizes={availableSizes}
-            availableColors={availableColors}
+            availableVariants={availableVariants}
             paperSize={paperSize}
             setPaperSize={setPaperSize}
             colorMode={colorMode}
             setColorMode={setColorMode}
+            regionCode={regionCode}
+            setRegionCode={setRegionCode}
             posterType={posterType}
             posterPreviewUrl={posterPreviewUrl}
             posterName={posterName}
@@ -353,14 +504,15 @@ export function PostersClient({
             groupSizeInput={groupSizeInput}
             setGroupSizeInput={setGroupSizeInput}
             busy={busy}
+            groupCount={data.groups.length}
             createPoster={createPoster}
             createGroup={createGroup}
           />
         </div>
       </section>
 
-      {/* Groups */}
-      {data.groups.length > 0 && (
+      {/* Your posters (groups + ungrouped) */}
+      {(data.groups.length > 0 || data.standalonePosters.length > 0) && (
         <section>
           <button
             type="button"
@@ -369,7 +521,7 @@ export function PostersClient({
             className="group inline-flex items-center gap-2 bg-transparent p-0 text-left"
             aria-expanded={showGroups}
           >
-            <span className="font-sub text-2xl text-foreground">{t("groups.title")}</span>
+            <span className="font-sub text-2xl text-foreground">{t("sections.yours")}</span>
             <ChevronDown
               size={20}
               className={cn(
@@ -390,41 +542,13 @@ export function PostersClient({
                   onRefresh={refresh}
                 />
               ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Standalone */}
-      {data.standalonePosters.length > 0 && (
-        <section>
-          <button
-            type="button"
-            data-slot="open-link"
-            onClick={() => setShowStandalone((open) => !open)}
-            className="group inline-flex items-center gap-2 bg-transparent p-0 text-left"
-            aria-expanded={showStandalone}
-          >
-            <span className="font-sub text-2xl text-foreground">{t("singles.title")}</span>
-            <ChevronDown
-              size={20}
-              className={cn(
-                "text-muted-foreground transition-transform duration-150 group-hover:text-foreground",
-                showStandalone && "rotate-180",
-              )}
-              aria-hidden
-            />
-          </button>
-          {showStandalone && (
-            <ul className="mt-4 divide-y divide-border rounded-lg border border-foreground/10 bg-card">
-              {data.standalonePosters.map((poster) => (
-                <PosterRow
-                  key={poster.id}
-                  poster={poster}
-                  onRenamed={refresh}
+              {data.standalonePosters.length > 0 && (
+                <UngroupedCard
+                  posters={data.standalonePosters}
+                  onRefresh={refresh}
                 />
-              ))}
-            </ul>
+              )}
+            </div>
           )}
         </section>
       )}
@@ -436,6 +560,7 @@ export function PostersClient({
         />
       ) : null}
     </div>
+    </PosterDragContext.Provider>
   );
 }
 
@@ -486,6 +611,8 @@ function GroupCard({
   const canDeleteGroup = !hasVerifiedPosters && scanCount === 0;
   const remaining = Math.max(0, 20 - group.posters.length);
   const displayName = group.name !== null && group.name.trim() !== "" ? group.name : t("groups.unnamed");
+  const { hover, isDragging, dropHandlers } = useDropTarget(group.id);
+  const groupFull = group.posters.length >= 20;
   const trimmedAddCountInput = addCountInput.trim();
   const parsedAddCountInput = parseGroupSizeInput(addCountInput);
   const addCountNeedsCorrection =
@@ -527,7 +654,15 @@ function GroupCard({
   }
 
   return (
-    <div className="rounded-lg border border-foreground/10 bg-card p-4">
+    <div
+      {...dropHandlers}
+      className={cn(
+        "rounded-lg border border-foreground/10 bg-card p-4 transition-colors",
+        isDragging && !groupFull && "border-dashed border-foreground/30",
+        hover && !groupFull && "border-solid border-primary/60 bg-primary/5",
+        isDragging && groupFull && "opacity-60",
+      )}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           {editingName ? (
@@ -611,8 +746,8 @@ function GroupCard({
       </div>
 
       {remaining > 0 ? (
-        <div className="mt-3 flex flex-wrap items-start gap-2">
-          <div className="flex flex-col gap-1">
+        <div className="mt-3 flex flex-wrap items-center gap-2 pb-6">
+          <div className="relative w-16 flex-none">
             <label htmlFor={`group-add-count-${group.id}`} className="sr-only">
               {t("group-card.add-count-label")}
             </label>
@@ -626,11 +761,14 @@ function GroupCard({
               onBlur={(event) => setAddCountInput(String(clampPosterAddCountInput(event.currentTarget.value, remaining)))}
               aria-invalid={addCountNeedsCorrection ? "true" : "false"}
               aria-describedby={`group-add-count-help-${group.id}`}
-              className="w-16 flex-none"
+              className="w-full"
             />
             <p
               id={`group-add-count-help-${group.id}`}
-              className={cn("text-xs", addCountNeedsCorrection ? "text-destructive" : "text-muted-foreground")}
+              className={cn(
+                "pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap text-xs",
+                addCountNeedsCorrection ? "text-destructive" : "text-muted-foreground",
+              )}
             >
               {addCountNeedsCorrection
                 ? t("group-card.add-invalid", { remaining, count: correctedAddCount })
@@ -655,6 +793,45 @@ function GroupCard({
       <ul className="mt-4 space-y-0 border-l border-foreground/15">
         {group.posters.map((poster) => (
           <PosterTreeItem
+            key={poster.id}
+            poster={poster}
+            onRefresh={onRefresh}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function UngroupedCard({
+  posters,
+  onRefresh,
+}: {
+  posters: ClientPoster[];
+  onRefresh: () => void;
+}) {
+  const t = useTranslations("posters");
+  const { hover, isDragging, dropHandlers } = useDropTarget(UNGROUPED_DROP_TARGET);
+  return (
+    <div
+      {...dropHandlers}
+      className={cn(
+        "rounded-lg border border-dashed border-foreground/15 bg-card p-4 transition-colors",
+        isDragging && "border-foreground/30",
+        hover && "border-solid border-primary/60 bg-primary/5",
+      )}
+    >
+      <div className="flex flex-col gap-1">
+        <h3 className="font-body text-base font-medium text-foreground">
+          {t("sections.ungrouped")}
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {t("groups.count", { count: posters.length })}
+        </p>
+      </div>
+      <ul className="mt-3 divide-y divide-border">
+        {posters.map((poster) => (
+          <PosterRow
             key={poster.id}
             poster={poster}
             onRenamed={onRefresh}
@@ -701,6 +878,92 @@ async function renamePosterRequest(posterId: string, name: string | null) {
   if (!response.ok) {
     throw new Error(await response.text());
   }
+}
+
+async function movePosterRequest(posterId: string, groupId: string | null) {
+  const response = await fetch(`/api/posters/${posterId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ groupId }),
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+}
+
+const POSTER_DRAG_MIME = "application/x-poster-id";
+const UNGROUPED_DROP_TARGET = "__standalone__";
+
+type PosterDragContextValue = {
+  draggingPosterId: string | null;
+  beginDrag: (posterId: string) => void;
+  endDrag: () => void;
+  onMovePoster: (posterId: string, targetGroupId: string | null) => Promise<void>;
+};
+
+const PosterDragContext = createContext<PosterDragContextValue | null>(null);
+
+function usePosterDrag() {
+  const ctx = useContext(PosterDragContext);
+  if (!ctx) throw new Error("PosterDragContext is missing");
+  return ctx;
+}
+
+function useDropTarget(targetId: string) {
+  const { draggingPosterId, onMovePoster, endDrag } = usePosterDrag();
+  const [hover, setHover] = useState(false);
+
+  const isDragging = draggingPosterId !== null;
+  const groupId = targetId === UNGROUPED_DROP_TARGET ? null : targetId;
+
+  const dropHandlers = {
+    onDragOver: (event: React.DragEvent) => {
+      if (!isDragging) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      if (!hover) setHover(true);
+    },
+    onDragEnter: (event: React.DragEvent) => {
+      if (!isDragging) return;
+      event.preventDefault();
+      setHover(true);
+    },
+    onDragLeave: (event: React.DragEvent) => {
+      if (!isDragging) return;
+      const related = event.relatedTarget as Node | null;
+      if (related && (event.currentTarget as Node).contains(related)) return;
+      setHover(false);
+    },
+    onDrop: (event: React.DragEvent) => {
+      if (!isDragging) return;
+      event.preventDefault();
+      const posterId = event.dataTransfer.getData(POSTER_DRAG_MIME) || draggingPosterId;
+      setHover(false);
+      endDrag();
+      if (posterId === null || posterId === "") return;
+      void onMovePoster(posterId, groupId);
+    },
+  };
+
+  return { hover, isDragging, dropHandlers };
+}
+
+function usePosterDragHandle(posterId: string) {
+  const { beginDrag, endDrag, draggingPosterId } = usePosterDrag();
+  const isDragging = draggingPosterId === posterId;
+
+  return {
+    isDragging,
+    handleProps: {
+      draggable: true,
+      onDragStart: (event: React.DragEvent) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData(POSTER_DRAG_MIME, posterId);
+        beginDrag(posterId);
+      },
+      onDragEnd: () => endDrag(),
+    },
+  };
 }
 
 function PosterRenameControls({
@@ -770,10 +1033,10 @@ function PosterRenameControls({
 
 function PosterTreeItem({
   poster,
-  onRenamed,
+  onRefresh,
 }: {
   poster: ClientPoster;
-  onRenamed: () => void;
+  onRefresh: () => void;
 }) {
   const t = useTranslations("posters");
   const [editing, setEditing] = useState(false);
@@ -781,6 +1044,7 @@ function PosterTreeItem({
   const [busy, setBusy] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { isDragging, handleProps } = usePosterDragHandle(poster.id);
 
   useEffect(() => {
     if (editing) {
@@ -813,7 +1077,7 @@ function PosterTreeItem({
     try {
       await renamePosterRequest(poster.id, next === "" ? null : next);
       setEditing(false);
-      onRenamed();
+      onRefresh();
     } catch {
       setRowError(t("errors.rename-failed"));
     } finally {
@@ -828,42 +1092,60 @@ function PosterTreeItem({
   }
 
   return (
-    <li id={`poster-${poster.id}`} className="pl-4">
+    <li
+      id={`poster-${poster.id}`}
+      className={cn(
+        "pl-4 transition-opacity",
+        isDragging && "opacity-40",
+      )}
+      {...(!editing ? handleProps : {})}
+    >
       <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative min-w-0 flex-1">
+        <div className="relative flex min-w-0 flex-1 items-center gap-2">
           <span
-            className="absolute -left-4 top-2.5 h-px w-3 bg-foreground/15"
+            className="absolute -left-4 top-1/2 h-px w-3 bg-foreground/15"
             aria-hidden
           />
-          {editing ? (
-            <PosterRenameControls
-              inputRef={inputRef}
-              draftName={draftName}
-              setDraftName={setDraftName}
-              busy={busy}
-              placeholder={t("actions.rename-placeholder")}
-              ariaLabel={t("actions.rename-poster", { code: displayCode })}
-              onCommit={() => void commitRename()}
-              onCancel={cancelRename}
-            />
-          ) : (
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="truncate text-sm font-medium text-foreground">{title}</span>
-              {poster.name !== null ? (
-                <span className={cn("font-mono text-xs", statusColor[poster.verification_status])}>
-                  {prefix}{displayCode}
-                </span>
-              ) : null}
-              {poster.scanCount > 0 ? (
-                <span className="text-xs text-muted-foreground">
-                  {poster.scanCount} referral{poster.scanCount === 1 ? "" : "s"}
-                </span>
-              ) : null}
-            </div>
+          {!editing && (
+            <span
+              aria-hidden
+              className="cursor-grab select-none text-muted-foreground/60 active:cursor-grabbing"
+              title={t("actions.move-poster", { code: displayCode })}
+            >
+              <Icon glyph="move" size={16} />
+            </span>
           )}
-          {rowError !== null ? (
-            <p className="mt-1 text-xs text-primary">{rowError}</p>
-          ) : null}
+          <div className="min-w-0 flex-1">
+            {editing ? (
+              <PosterRenameControls
+                inputRef={inputRef}
+                draftName={draftName}
+                setDraftName={setDraftName}
+                busy={busy}
+                placeholder={t("actions.rename-placeholder")}
+                ariaLabel={t("actions.rename-poster", { code: displayCode })}
+                onCommit={() => void commitRename()}
+                onCancel={cancelRename}
+              />
+            ) : (
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="truncate text-sm font-medium text-foreground">{title}</span>
+                {poster.name !== null ? (
+                  <span className={cn("font-mono text-xs", statusColor[poster.verification_status])}>
+                    {prefix}{displayCode}
+                  </span>
+                ) : null}
+                {poster.scanCount > 0 ? (
+                  <span className="text-xs text-muted-foreground">
+                    {poster.scanCount} referral{poster.scanCount === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </div>
+            )}
+            {rowError !== null ? (
+              <p className="mt-1 text-xs text-primary">{rowError}</p>
+            ) : null}
+          </div>
         </div>
 
         {!editing && (
@@ -925,6 +1207,7 @@ function PosterRow({
   const [busy, setBusy] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { isDragging, handleProps } = usePosterDragHandle(poster.id);
 
   useEffect(() => {
     if (editing) {
@@ -970,38 +1253,56 @@ function PosterRow({
   }
 
   return (
-    <li id={`poster-${poster.id}`} className="flex items-center justify-between gap-3 px-4 py-3">
-      <div className="min-w-0 flex-1">
-        {editing ? (
-          <PosterRenameControls
-            inputRef={inputRef}
-            draftName={draftName}
-            setDraftName={setDraftName}
-            busy={busy}
-            placeholder={t("actions.rename-placeholder")}
-            ariaLabel={t("actions.rename-poster", { code: displayCode })}
-            onCommit={() => void commitRename()}
-            onCancel={cancelRename}
-          />
-        ) : (
-          <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
-            <span className="truncate text-sm font-medium text-foreground">{title}</span>
-            {poster.name !== null ? (
-              <span className="font-mono text-xs text-muted-foreground">{displayCode}</span>
-            ) : null}
-            <span className={cn("text-xs", statusColor[poster.verification_status])}>
-              {t(`status.${poster.verification_status}`)}
-            </span>
-            {poster.scanCount > 0 ? (
-              <span className="text-xs text-muted-foreground">
-                {poster.scanCount} referral{poster.scanCount === 1 ? "" : "s"}
-              </span>
-            ) : null}
-          </div>
+    <li
+      id={`poster-${poster.id}`}
+      className={cn(
+        "flex items-center justify-between gap-3 px-4 py-3 transition-opacity",
+        isDragging && "opacity-40",
+      )}
+      {...(!editing ? handleProps : {})}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {!editing && (
+          <span
+            aria-hidden
+            className="cursor-grab select-none text-muted-foreground/60 active:cursor-grabbing"
+            title={t("actions.move-poster", { code: displayCode })}
+          >
+            <Icon glyph="move" size={16} />
+          </span>
         )}
-        {rowError !== null ? (
-          <p className="mt-1 text-xs text-primary">{rowError}</p>
-        ) : null}
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <PosterRenameControls
+              inputRef={inputRef}
+              draftName={draftName}
+              setDraftName={setDraftName}
+              busy={busy}
+              placeholder={t("actions.rename-placeholder")}
+              ariaLabel={t("actions.rename-poster", { code: displayCode })}
+              onCommit={() => void commitRename()}
+              onCancel={cancelRename}
+            />
+          ) : (
+            <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+              <span className="truncate text-sm font-medium text-foreground">{title}</span>
+              {poster.name !== null ? (
+                <span className="font-mono text-xs text-muted-foreground">{displayCode}</span>
+              ) : null}
+              <span className={cn("text-xs", statusColor[poster.verification_status])}>
+                {t(`status.${poster.verification_status}`)}
+              </span>
+              {poster.scanCount > 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  {poster.scanCount} referral{poster.scanCount === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
+          )}
+          {rowError !== null ? (
+            <p className="mt-1 text-xs text-primary">{rowError}</p>
+          ) : null}
+        </div>
       </div>
 
       {!editing && (
@@ -1050,47 +1351,26 @@ function PosterRow({
   );
 }
 
-function SegmentedControl<T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string }[];
-}) {
-  return (
-    <div className="flex w-fit overflow-hidden rounded border border-foreground/15 bg-muted">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          data-slot="open-link"
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            "cursor-pointer px-3 py-1.5 text-sm transition-colors",
-            value === opt.value
-              ? "bg-foreground text-background font-medium"
-              : "text-foreground hover:bg-foreground/8",
-          )}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+type VariantOption = {
+  key: string;
+  colorMode: ColorMode;
+  regionCode: string | null;
+  regionName: string | null;
+  label: string;
+};
 
 function CreateSection({
   campaigns,
   campaignSlug,
   setCampaignSlug,
   availableSizes,
-  availableColors,
+  availableVariants,
   paperSize,
   setPaperSize,
   colorMode,
   setColorMode,
+  regionCode,
+  setRegionCode,
   posterType,
   posterPreviewUrl,
   posterName,
@@ -1100,6 +1380,7 @@ function CreateSection({
   groupSizeInput,
   setGroupSizeInput,
   busy,
+  groupCount,
   createPoster,
   createGroup,
 }: {
@@ -1107,11 +1388,13 @@ function CreateSection({
   campaignSlug: string | null;
   setCampaignSlug: (value: string) => void;
   availableSizes: PaperSize[];
-  availableColors: ColorMode[];
+  availableVariants: VariantOption[];
   paperSize: PaperSize;
   setPaperSize: (value: PaperSize) => void;
   colorMode: ColorMode;
   setColorMode: (value: ColorMode) => void;
+  regionCode: string | null;
+  setRegionCode: (value: string | null) => void;
   posterType: PosterStyle;
   posterPreviewUrl: string | null;
   posterName: string;
@@ -1121,6 +1404,7 @@ function CreateSection({
   groupSizeInput: string;
   setGroupSizeInput: (value: string) => void;
   busy: boolean;
+  groupCount: number;
   createPoster: () => void;
   createGroup: () => void;
 }) {
@@ -1129,7 +1413,7 @@ function CreateSection({
   const parsedGroupSizeInput = parseGroupSizeInput(groupSizeInput);
   const groupSizeNeedsCorrection =
     trimmedGroupSizeInput !== "" &&
-    (parsedGroupSizeInput === null || parsedGroupSizeInput < 1 || parsedGroupSizeInput > 20);
+    (parsedGroupSizeInput === null || parsedGroupSizeInput < 0 || parsedGroupSizeInput > 20);
   const correctedGroupSize = clampGroupSize(parsedGroupSizeInput);
 
   return (
@@ -1162,21 +1446,37 @@ function CreateSection({
           {availableSizes.length > 1 && (
             <div className="space-y-1.5">
               <label className="block text-xs text-muted-foreground">Paper size</label>
-              <SegmentedControl<PaperSize>
-                value={paperSize}
-                onChange={setPaperSize}
-                options={PAPER_SIZE_OPTIONS.filter((o) => availableSizes.includes(o.value))}
-              />
+              <Select value={paperSize} onValueChange={(value) => setPaperSize(value as PaperSize)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  side="bottom"
+                  align="start"
+                  sideOffset={4}
+                  className="w-[var(--radix-select-trigger-width)] min-w-0"
+                >
+                  {availableSizes.map((size) => (
+                    <SelectItem key={size} value={size}>
+                      {PAPER_SIZE_LABELS[size]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
-          {availableColors.length > 1 && (
+          {availableVariants.length > 1 && (
             <div className="space-y-1.5">
-              <label className="block text-xs text-muted-foreground">Colour</label>
-              <SegmentedControl<ColorMode>
-                value={colorMode}
-                onChange={setColorMode}
-                options={COLOR_MODE_OPTIONS.filter((o) => availableColors.includes(o.value))}
+              <label className="block text-xs text-muted-foreground">Variant</label>
+              <VariantCombobox
+                value={`${colorMode}|${regionCode ?? ""}`}
+                options={availableVariants}
+                onChange={(option) => {
+                  setColorMode(option.colorMode);
+                  setRegionCode(option.regionCode);
+                }}
               />
             </div>
           )}
@@ -1206,7 +1506,7 @@ function CreateSection({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-foreground font-medium shrink-0">Poster group</p>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
-              <div className="flex flex-col gap-1">
+              <div className="relative w-16 flex-none">
                 <label htmlFor="group-size-input" className="sr-only">
                   {t("groups.size-label")}
                 </label>
@@ -1220,11 +1520,14 @@ function CreateSection({
                   onBlur={(event) => setGroupSizeInput(String(clampGroupSizeInput(event.currentTarget.value)))}
                   aria-invalid={groupSizeNeedsCorrection ? "true" : "false"}
                   aria-describedby="group-size-help"
-                  className="w-16 flex-none"
+                  className="w-full"
                 />
                 <p
                   id="group-size-help"
-                  className={cn("text-xs", groupSizeNeedsCorrection ? "text-destructive" : "text-muted-foreground")}
+                  className={cn(
+                    "pointer-events-none absolute left-0 top-full mt-1 whitespace-nowrap text-xs",
+                    groupSizeNeedsCorrection ? "text-destructive" : "text-muted-foreground",
+                  )}
                 >
                   {groupSizeNeedsCorrection
                     ? t("groups.size-invalid", { count: correctedGroupSize })
@@ -1241,7 +1544,8 @@ function CreateSection({
                 size="app-sm"
                 className="w-32"
                 onClick={createGroup}
-                disabled={busy || campaignSlug === null || groupName.trim() === ""}
+                disabled={busy || campaignSlug === null || groupName.trim() === "" || groupCount >= 300}
+                title={groupCount >= 300 ? "You can have at most 300 poster groups." : undefined}
               >
                 {t("actions.create-group")}
               </Button>
@@ -1254,6 +1558,107 @@ function CreateSection({
         <PosterPreview url={posterPreviewUrl} posterType={posterType} />
       ) : null}
     </div>
+  );
+}
+
+function VariantCombobox({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: VariantOption[];
+  onChange: (option: VariantOption) => void;
+}) {
+  const [open, setOpenState] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const setOpen = useCallback((next: boolean) => {
+    setOpenState(next);
+    if (!next) setQuery("");
+  }, []);
+
+  const active = options.find((o) => o.key === value) ?? null;
+  const trimmedQuery = query.trim().toLowerCase();
+  const filtered =
+    trimmedQuery === ""
+      ? options
+      : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
+
+  useEffect(() => {
+    if (!open) return;
+    const id = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
+  }, [open]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-slot="select-trigger"
+          data-size="default"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className="flex h-9 w-56 cursor-pointer items-center justify-between gap-1.5 rounded-none border border-transparent bg-input/50 px-3 py-2 text-sm text-foreground whitespace-nowrap outline-none transition-[color,box-shadow,background-color] select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+        >
+          <span className="truncate">{active?.label ?? ""}</span>
+          <ChevronDown size={16} className="opacity-50" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        className="w-[var(--radix-popover-trigger-width)] gap-2 rounded-none p-2"
+      >
+        <div className="relative">
+          <Search
+            size={14}
+            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search variants"
+            aria-label="Search variants"
+            className="h-8 rounded-none pl-7 text-sm"
+          />
+        </div>
+        <ul role="listbox" className="max-h-64 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <li className="px-2 py-1.5 text-xs text-muted-foreground">No matches</li>
+          ) : (
+            filtered.map((option) => {
+              const selected = option.key === value;
+              return (
+                <li key={option.key}>
+                  <button
+                    type="button"
+                    role="option"
+                    data-slot="select-item"
+                    aria-selected={selected}
+                    onClick={() => {
+                      onChange(option);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full cursor-pointer items-center justify-between gap-2 bg-transparent px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-foreground/8 focus:bg-foreground/8 focus:outline-none",
+                      selected && "font-medium",
+                    )}
+                  >
+                    <span className="truncate">{option.label}</span>
+                    {selected ? <Check size={14} aria-hidden /> : null}
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 
