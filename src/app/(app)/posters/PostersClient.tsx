@@ -1117,7 +1117,12 @@ function PosterTreeItem({
   }
 
   async function deletePoster() {
-    if (!window.confirm(t("actions.delete-poster-confirm", { code: displayCode }))) {
+    if (!window.confirm(
+      t("actions.delete-poster-confirm", {
+        name: poster.name ?? displayCode,
+        code: displayCode,
+      }),
+    )) {
       return;
     }
     setBusy(true);
