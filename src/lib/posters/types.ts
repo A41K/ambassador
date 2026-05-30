@@ -148,6 +148,19 @@ export type VerifiedPosterDisplay = {
   groupName: string | null;
 };
 
+/**
+ * The client only needs the outcome, detected codes, a message, and (on
+ * success) the verified poster's display fields. Everything else on a
+ * `PosterRow` — proof paths, QR tokens, coordinates, metadata — stays server
+ * side and is never sent back to the uploader.
+ */
+export type PublicScanResult = {
+  status: ScanMatchResult["status"];
+  detectedQrCodes: string[];
+  message: string;
+  verifiedPoster?: VerifiedPosterDisplay;
+};
+
 export type ScanMatchResult =
   | {
       status: "success" | "auto_matched" | "already_verified";

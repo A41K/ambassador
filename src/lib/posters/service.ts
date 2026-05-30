@@ -42,6 +42,7 @@ import {
   type PosterGroupCharset,
   type PosterRow,
   type PosterStyle,
+  type PublicScanResult,
   type ScanMatchResult,
   type SubmitPosterProofInput,
   type VerifiedPosterDisplay,
@@ -441,6 +442,18 @@ export async function getBulkPosterZipForUser(userId: string) {
     zip: await generatePosterZip(allPosters),
     count: allPosters.length,
   };
+}
+
+/** Strip a scan result down to the fields the uploader's client actually uses. */
+export function toPublicScanResult(result: ScanMatchResult): PublicScanResult {
+  const base = {
+    status: result.status,
+    detectedQrCodes: result.detectedQrCodes,
+    message: result.message,
+  };
+  return "verifiedPoster" in result
+    ? { ...base, verifiedPoster: result.verifiedPoster }
+    : base;
 }
 
 export async function submitPosterProof(input: SubmitPosterProofInput): Promise<ScanMatchResult> {

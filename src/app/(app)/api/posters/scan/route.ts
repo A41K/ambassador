@@ -6,7 +6,7 @@ import {
   requirePosterSession,
   validateImageUpload,
 } from "@/lib/posters/http";
-import { scanAnyUserPoster } from "@/lib/posters/service";
+import { scanAnyUserPoster, toPublicScanResult } from "@/lib/posters/service";
 import { checkRateLimit, getRateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       ...location,
     });
 
-    return Response.json(result);
+    return Response.json(toPublicScanResult(result));
   } catch (error) {
     return posterErrorResponse(error, "Failed to scan poster.");
   }

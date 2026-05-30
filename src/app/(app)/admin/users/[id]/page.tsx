@@ -32,6 +32,7 @@ import {
   refreshOfficeGrantBalanceForUser,
 } from "@/lib/hcb/grants";
 import { getCachedHackatimeTrustLevel } from "@/lib/hackatime";
+import { getPosterProofUrl } from "@/lib/posters/storage";
 import { readHcaAccessToken } from "@/lib/hca-access-token";
 import { ensureUserAddressSchema } from "@/lib/database/user-address-schema";
 import {
@@ -403,6 +404,20 @@ export default async function AdminUserDetailPage({
   const currentNotePage = Math.min(notesPage, totalNotePages);
   const totalPosterPages = Math.max(1, Math.ceil(posterCounts.total_count / POSTERS_PER_PAGE));
   const currentPosterPage = Math.min(postersPage, totalPosterPages);
+  const posterProofUrls = new Map(
+    await Promise.all(
+      posterList.map(async (poster) => {
+        const isImage =
+          poster.proof_path !== null &&
+          poster.proof_path !== "" &&
+          (poster.proof_content_type === null || poster.proof_content_type.startsWith("image/"));
+        const url = isImage
+          ? await getPosterProofUrl(poster.proof_path, poster.proof_content_type)
+          : null;
+        return [poster.id, url] as const;
+      }),
+    ),
+  );
   const totalReferralPages = Math.max(1, Math.ceil(referralCounts.total_count / REFERRALS_PER_PAGE));
   const currentReferralPage = Math.min(referralsPage, totalReferralPages);
   const numberFormatter = new Intl.NumberFormat(locale);
@@ -1185,20 +1200,16 @@ export default async function AdminUserDetailPage({
                     const canReject =
                       poster.verification_status !== "rejected" &&
                       poster.verification_status !== "success";
-                    const hasImageProof =
-                      poster.proof_path !== null &&
-                      poster.proof_path !== "" &&
-                      (poster.proof_content_type === null ||
-                        poster.proof_content_type.startsWith("image/"));
+                    const proofUrl = posterProofUrls.get(poster.id) ?? null;
                     return (
                       <tr key={poster.id} className="border-b border-white last:border-b-0">
                         <td className="px-0 py-4 font-body text-sm text-white">
                           {formatDateTime(poster.created_at, locale)}
                         </td>
                         <td className="px-4 py-4">
-                          {hasImageProof ? (
+                          {proofUrl !== null ? (
                             <ExpandableImage
-                              src={`/api/admin/users/${user.id}/posters/${poster.id}/proof`}
+                              src={proofUrl}
                               alt={poster.name ?? poster.referral_code}
                             />
                           ) : (

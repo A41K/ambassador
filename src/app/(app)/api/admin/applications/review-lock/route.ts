@@ -75,6 +75,9 @@ export async function DELETE(request: Request) {
   }
 
   await ensureSchema();
+  if (!(await isUserAdmin(session.sub))) {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const body = await request.json();
   const applicationId = body.applicationId;

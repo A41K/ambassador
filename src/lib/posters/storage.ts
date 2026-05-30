@@ -148,31 +148,6 @@ async function saveRemote(key: string, buffer: Buffer, contentType: string | nul
   );
 }
 
-async function readRemote(key: string): Promise<Buffer> {
-  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
-  const { client, env } = await getS3Client();
-  const response = await client.send(
-    new GetObjectCommand({
-      Bucket: env.bucket,
-      Key: `${PROOF_PREFIX}${key}`,
-    }),
-  );
-
-  const body = response.Body;
-  if (!body) {
-    throw new Error(`No body returned for proof ${key}`);
-  }
-  if (typeof body !== "object" || !(Symbol.asyncIterator in body)) {
-    throw new Error(`Unsupported proof body returned for ${key}`);
-  }
-
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of body as AsyncIterable<Uint8Array>) {
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
-}
-
 async function deleteRemote(key: string) {
   const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
   const { client, env } = await getS3Client();
@@ -202,12 +177,41 @@ export async function savePosterProofFile(posterId: string, file: File): Promise
   };
 }
 
-export async function readPosterProofFile(key: string): Promise<Buffer> {
+const PROOF_URL_TTL_SECONDS = 60 * 60;
+
+/**
+ * Resolve a directly-loadable URL for a stored proof.
+ *
+ * For R2 we hand back a short-lived presigned URL so the image is served from
+ * the bucket's own origin rather than being proxied through the app. That keeps
+ * any user-supplied markup (e.g. a malicious SVG) off our origin, where it could
+ * otherwise reach authenticated `/api/admin` routes. Local development has no
+ * public origin, so we inline the bytes as a data URL instead.
+ */
+export async function getPosterProofUrl(
+  key: string | null | undefined,
+  contentType?: string | null,
+): Promise<string | null> {
+  if (key === null || key === undefined || key === "") return null;
+
   const driver = getStorageDriver();
   if (driver === "r2") {
-    return readRemote(key);
+    const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+    const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+    const { client, env } = await getS3Client();
+    return getSignedUrl(
+      client,
+      new GetObjectCommand({ Bucket: env.bucket, Key: `${PROOF_PREFIX}${key}` }),
+      { expiresIn: PROOF_URL_TTL_SECONDS },
+    );
   }
-  return readLocal(key);
+
+  const buffer = await readLocal(key);
+  const type =
+    contentType !== null && contentType !== undefined && contentType.startsWith("image/")
+      ? contentType
+      : "application/octet-stream";
+  return `data:${type};base64,${buffer.toString("base64")}`;
 }
 
 export async function deletePosterProofFile(key: string | null | undefined) {

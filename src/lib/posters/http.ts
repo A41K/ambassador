@@ -121,5 +121,11 @@ export function validateImageUpload(file: File) {
     return { message: "Only image uploads are allowed.", status: 400 };
   }
 
+  // SVGs can carry scripts; reject them so a malicious proof can never be
+  // served back as active markup.
+  if (file.type === "image/svg+xml") {
+    return { message: "SVG images are not allowed.", status: 400 };
+  }
+
   return null;
 }
