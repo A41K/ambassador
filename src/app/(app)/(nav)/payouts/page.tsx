@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { forbidden, redirect } from "next/navigation";
 import { getLocale } from "next-intl/server";
 
-import { Navbar } from "@/components/navbar";
 import { pillVariants } from "@/components/ui/pill";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -14,10 +13,9 @@ import {
   PAYOUT_STATUS_PENDING,
   PAYOUT_STATUS_REJECTED,
 } from "@/lib/payouts/service";
-import { canAccessPosters, getPosterAccessState } from "@/lib/posters/access";
+import { getPosterAccessState } from "@/lib/posters/access";
 import { getEffectiveSafeguards } from "@/lib/safeguards";
 import { getSession } from "@/lib/session";
-import { canAccessStardanceReferrals } from "@/lib/stardance-referrals";
 
 import { RequestPayoutForm } from "./RequestPayoutForm";
 
@@ -61,9 +59,6 @@ export default async function PayoutsPage() {
   // The flag only gates *requesting* a payout; the page itself always works.
   const canSubmit = safeguards.payoutsEnabled;
 
-  const canAccessAdmin =
-    Boolean(session.impersonator) || Boolean(user?.is_admin ?? session.isAdmin);
-
   const [{ balance, payouts }, transactions, locale] = await Promise.all([
     listPayoutsForUser(session.sub),
     listBalanceTransactionsForUser(session.sub),
@@ -72,33 +67,8 @@ export default async function PayoutsPage() {
 
   const hasPending = payouts.some((p) => p.status === PAYOUT_STATUS_PENDING);
 
-  const showPostersLink =
-    safeguards.postersEnabled &&
-    canAccessPosters({
-      latestApplicationStatus: user.latest_application_status ?? null,
-      manualDashboardState: user.manual_dashboard_state ?? null,
-      isOnboardingComplete: user.is_onboarding_complete,
-      isAdmin: canAccessAdmin,
-    });
-  const showReferralsLink =
-    safeguards.referralsEnabled &&
-    canAccessStardanceReferrals({
-      latestApplicationStatus: user.latest_application_status ?? null,
-      manualDashboardState: user.manual_dashboard_state ?? null,
-      isOnboardingComplete: user.is_onboarding_complete,
-      isAdmin: canAccessAdmin,
-    });
-
   return (
-    <main className="page-shell">
-      <Navbar
-        isAdmin={canAccessAdmin}
-        balanceCents={balance.balanceCents}
-        showPostersLink={showPostersLink}
-        showReferralsLink={showReferralsLink}
-        showPayouts
-      />
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
         <header className="mb-8">
           <p className="font-body text-sm text-secondary">Your balance</p>
           <p className="text-5xl text-foreground">{formatUsdCents(balance.balanceCents)}</p>
@@ -223,7 +193,6 @@ export default async function PayoutsPage() {
             )}
           </div>
         </section>
-      </div>
-    </main>
+    </div>
   );
 }

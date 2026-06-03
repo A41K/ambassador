@@ -17,14 +17,12 @@ export async function Navbar({
   balanceCents = 0,
   showPostersLink = false,
   showReferralsLink = false,
-  showPayouts = false,
   showBottomBorder = true,
 }: {
   isAdmin?: boolean;
   balanceCents?: number;
   showPostersLink?: boolean;
   showReferralsLink?: boolean;
-  showPayouts?: boolean;
   showBottomBorder?: boolean;
 }) {
   const t = await getTranslations();
@@ -49,20 +47,14 @@ export async function Navbar({
           />
         </a>
         <div className="flex items-center gap-1 sm:gap-2">
-          {showPayouts ? (
-            <NavItem
-              href="/payouts"
-              aria-label={t("app.navbar.balance-label")}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm tracking-wide text-acceptance transition-opacity hover:opacity-70 sm:px-3 sm:text-base"
-            >
-              <Wallet size={16} aria-hidden />
-              {balance}
-            </NavItem>
-          ) : (
-            <span className="inline-flex h-9 items-center rounded-lg px-2 text-sm tracking-wide text-acceptance sm:px-3 sm:text-base">
-              {balance}
-            </span>
-          )}
+          <NavItem
+            href="/payouts"
+            aria-label={t("app.navbar.balance-label")}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm tracking-wide text-acceptance transition-opacity hover:opacity-70 sm:px-3 sm:text-base"
+          >
+            <Wallet size={16} aria-hidden />
+            {balance}
+          </NavItem>
           {isAdmin && (
             <NavItem
               href="/admin"

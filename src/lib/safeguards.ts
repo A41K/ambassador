@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import sql from "@/lib/database/client";
 
 export const SAFEGUARD_KEYS = {
@@ -182,7 +184,8 @@ export async function getOverrideFlagsForUser(userId: string): Promise<Set<Safeg
   return keys;
 }
 
-export async function getEffectiveSafeguards(userId: string | null): Promise<Safeguards> {
+// cache() so the (nav) layout and the page it wraps share one lookup per request.
+export const getEffectiveSafeguards = cache(async (userId: string | null): Promise<Safeguards> => {
   if (userId === null) return getSafeguards();
 
   const [safeguards, overrides] = await Promise.all([
@@ -196,7 +199,7 @@ export async function getEffectiveSafeguards(userId: string | null): Promise<Saf
     referralsEnabled: safeguards.referralsEnabled || overrides.has(SAFEGUARD_KEYS.referralsEnabled),
     payoutsEnabled: safeguards.payoutsEnabled || overrides.has(SAFEGUARD_KEYS.payoutsEnabled),
   };
-}
+});
 
 export async function listOverridesGroupedByFlag(): Promise<
   Record<SafeguardKey, UserFeatureFlagOverrideWithUser[]>

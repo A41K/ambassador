@@ -2,16 +2,14 @@ import type { Metadata } from "next";
 import { forbidden, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { Navbar } from "@/components/navbar";
 import { getTranslatedPageMetadata } from "@/i18n/metadata";
 import { ensureSchema } from "@/lib/database/ensure-schema";
 import { canAccessPosters, getPosterAccessState } from "@/lib/posters/access";
 import { listPosterCampaigns } from "@/lib/posters/config";
 import { getDefaultPaperSize, normalizeRegionCode } from "@/lib/posters/paper-size";
-import { listPosterDataForUser } from "@/lib/posters/service";
+import { listClientPosterDataForUser } from "@/lib/posters/service";
 import { getEffectiveSafeguards } from "@/lib/safeguards";
 import { getSession } from "@/lib/session";
-import { canAccessStardanceReferrals } from "@/lib/stardance-referrals";
 
 import { PostersClient } from "./PostersClient";
 
@@ -40,14 +38,7 @@ export default async function PostersPage() {
     forbidden();
   }
 
-  const showReferralsLink = safeguards.referralsEnabled && canAccessStardanceReferrals({
-    latestApplicationStatus: user?.latest_application_status ?? null,
-    manualDashboardState: user?.manual_dashboard_state ?? null,
-    isOnboardingComplete: user?.is_onboarding_complete ?? false,
-    isAdmin: canAccessAdmin,
-  });
-
-  const data = await listPosterDataForUser(session.sub);
+  const data = await listClientPosterDataForUser(session.sub);
 
   const campaigns = listPosterCampaigns();
 
@@ -60,15 +51,7 @@ export default async function PostersPage() {
   const pendingCount = allPosters.filter((p) => p.verification_status === "pending").length;
 
   return (
-    <main className="page-shell">
-      <Navbar
-        isAdmin={canAccessAdmin}
-        balanceCents={user.balance_cents ?? 0}
-        showPostersLink
-        showReferralsLink={showReferralsLink}
-        showPayouts
-      />
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
         <header className="mb-6 sm:mb-10">
           <div className="flex flex-wrap items-baseline gap-x-6 gap-y-3 sm:gap-x-8">
             <h1 className="font-sub text-4xl text-foreground">{t("posters.heading")}</h1>
@@ -98,7 +81,6 @@ export default async function PostersPage() {
           defaultPaperSize={getDefaultPaperSize(user.country_code, user.ambassador_region)}
           defaultRegionCode={normalizeRegionCode(user.country_code)}
         />
-      </div>
-    </main>
+    </div>
   );
 }

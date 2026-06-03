@@ -5,7 +5,6 @@ import { useId, type ComponentProps, type ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { DevAdminSelector } from "@/components/dev-admin-selector";
-import { Navbar } from "@/components/navbar";
 import { buttonVariants } from "@/components/ui/button";
 import { getTranslatedPageMetadata } from "@/i18n/metadata";
 import {
@@ -29,11 +28,9 @@ import {
 } from "@/lib/hcb/grants";
 import { loadUserHackClubAddresses } from "@/lib/hca-addresses";
 import { readHcaAccessToken } from "@/lib/hca-access-token";
-import { canAccessPosters } from "@/lib/posters/access";
 import { getEffectiveSafeguards } from "@/lib/safeguards";
 import { getSession } from "@/lib/session";
 import { canAccessShirts } from "@/lib/shirt/access";
-import { canAccessStardanceReferrals } from "@/lib/stardance-referrals";
 import {
   resolveAmbassadorRegion,
   type HackClubAddress,
@@ -308,24 +305,7 @@ export default async function DashboardPage({
   const mockHcbEmail = session.email ?? "your account email";
 
   return (
-    <main className="page-shell">
-      <Navbar
-        isAdmin={canAccessAdmin}
-        balanceCents={user.balance_cents ?? 0}
-        showPostersLink={safeguards.postersEnabled && canAccessPosters({
-          latestApplicationStatus: application?.status ?? null,
-          manualDashboardState: user.manual_dashboard_state,
-          isOnboardingComplete: shirtOnboardingStatus.isOnboardingComplete,
-          isAdmin: canAccessAdmin,
-        })}
-        showReferralsLink={safeguards.referralsEnabled && canAccessStardanceReferrals({
-          latestApplicationStatus: application?.status ?? null,
-          manualDashboardState: user.manual_dashboard_state,
-          isOnboardingComplete: shirtOnboardingStatus.isOnboardingComplete,
-          isAdmin: canAccessAdmin,
-        })}
-        showPayouts
-      />
+    <>
       <div className="mx-auto max-w-3xl px-6 py-12">
         <header className="flex items-center gap-2 md:gap-3">
           <h1 className="font-sub text-4xl leading-none text-foreground md:text-5xl">
@@ -360,7 +340,7 @@ export default async function DashboardPage({
         <div className="mt-6">{resolved.node}</div>
       </div>
       {canUseSelector && <DevAdminSelector current={selectedDevState ?? baseResolved.devState} />}
-    </main>
+    </>
   );
 }
 

@@ -181,6 +181,34 @@ export async function listPosterDataForUser(userId: string) {
   };
 }
 
+function toPosterListItem(poster: ReturnType<typeof toClientPoster>) {
+  return {
+    id: poster.id,
+    referral_code: poster.referral_code,
+    poster_type: poster.poster_type,
+    verification_status: poster.verification_status,
+    campaign_slug: poster.campaign_slug,
+    poster_group_id: poster.poster_group_id,
+    location_description: poster.location_description,
+    name: poster.name,
+    scanCount: poster.scanCount,
+  };
+}
+
+export async function listClientPosterDataForUser(userId: string) {
+  const { groups, standalonePosters } = await listPosterDataForUser(userId);
+  return {
+    groups: groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      campaign_slug: group.campaign_slug,
+      poster_count: group.poster_count,
+      posters: group.posters.map(toPosterListItem),
+    })),
+    standalonePosters: standalonePosters.map(toPosterListItem),
+  };
+}
+
 export async function createSinglePosterForUser(
   input: Omit<CreatePosterInput, "userId" | "campaignSlug" | "posterType" | "charset"> & {
     userId: string;

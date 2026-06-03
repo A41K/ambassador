@@ -1,6 +1,6 @@
 import {
   createPosterGroupForUser,
-  listPosterDataForUser,
+  listClientPosterDataForUser,
 } from "@/lib/posters/service";
 import { isSameOriginRequest, posterErrorResponse, requirePosterSession } from "@/lib/posters/http";
 import { checkRateLimit, getRateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const session = await requirePosterSession();
-    const data = await listPosterDataForUser(session.sub);
+    const data = await listClientPosterDataForUser(session.sub);
     return Response.json({ groups: data.groups });
   } catch (error) {
     return posterErrorResponse(error, "Failed to load poster groups.", 500);

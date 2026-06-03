@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import sql from "@/lib/database/client";
 import { getAmbassadorOnboardingStatus } from "@/lib/ambassadors/airtable";
 import { isAcceptedApplicationStatus } from "@/lib/applications/status";
@@ -15,7 +17,8 @@ export type PosterAccessState = {
   is_onboarding_complete: boolean;
 };
 
-export async function getPosterAccessState(userId: string): Promise<PosterAccessState | null> {
+// cache() so the (nav) layout and the page it wraps share one lookup per request.
+export const getPosterAccessState = cache(async (userId: string): Promise<PosterAccessState | null> => {
   const user = (await sql<Omit<PosterAccessState, "is_onboarding_complete">[]>`
     SELECT
       users.balance_cents,
@@ -58,7 +61,7 @@ export async function getPosterAccessState(userId: string): Promise<PosterAccess
     ...user,
     is_onboarding_complete: onboardingStatus.isOnboardingComplete,
   };
-}
+});
 
 export function hasApprovedAmbassadorStatus(input: {
   latestApplicationStatus?: string | null;

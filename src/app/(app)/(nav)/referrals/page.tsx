@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import { forbidden, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { Navbar } from "@/components/navbar";
 import { getTranslatedPageMetadata } from "@/i18n/metadata";
 import { ensureSchema } from "@/lib/database/ensure-schema";
-import { canAccessPosters, getPosterAccessState } from "@/lib/posters/access";
+import { getPosterAccessState } from "@/lib/posters/access";
 import { getEffectiveSafeguards } from "@/lib/safeguards";
 import { getSession } from "@/lib/session";
 import {
@@ -47,15 +46,6 @@ export default async function ReferralsPage() {
     forbidden();
   }
 
-  const showPostersLink =
-    safeguards.postersEnabled &&
-    canAccessPosters({
-      latestApplicationStatus: user?.latest_application_status ?? null,
-      manualDashboardState: user?.manual_dashboard_state ?? null,
-      isOnboardingComplete: user?.is_onboarding_complete ?? false,
-      isAdmin: canAccessAdmin,
-    });
-
   try {
     await syncStardanceRsvpReferralsForUser(session.sub);
   } catch (error) {
@@ -69,24 +59,16 @@ export default async function ReferralsPage() {
   ]);
 
   return (
-    <main className="page-shell">
-      <Navbar
-        isAdmin={canAccessAdmin}
-        balanceCents={user?.balance_cents ?? 0}
-        showPostersLink={showPostersLink}
-        showReferralsLink
+    <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6 sm:pb-28 sm:pt-12">
+      <header className="mb-6 sm:mb-10">
+        <h1 className="text-4xl text-foreground">{t("referrals.heading")}</h1>
+        <p className="mt-2 text-base text-muted-foreground">{t("referrals.subheading")}</p>
+      </header>
+      <ReferralsClient
+        referralCodes={referralCodes}
+        archivedReferralCodes={archivedReferralCodes}
+        referrals={referrals}
       />
-      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6 sm:pb-28 sm:pt-12">
-        <header className="mb-6 sm:mb-10">
-          <h1 className="text-4xl text-foreground">{t("referrals.heading")}</h1>
-          <p className="mt-2 text-base text-muted-foreground">{t("referrals.subheading")}</p>
-        </header>
-        <ReferralsClient
-          referralCodes={referralCodes}
-          archivedReferralCodes={archivedReferralCodes}
-          referrals={referrals}
-        />
-      </div>
-    </main>
+    </div>
   );
 }

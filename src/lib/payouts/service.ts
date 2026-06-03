@@ -236,10 +236,8 @@ function serializePayout(row: PayoutRow, balanceCents: number) {
     accountNumber: row.account_number,
     routingNumber: row.routing_number,
     ambassadorNotes: row.ambassador_notes,
-    adminComment: row.admin_comment,
     publicComment: row.public_comment,
     transferLink: row.transfer_link,
-    createdByAdminId: row.created_by_admin_id,
     submittedAt: row.submitted_at,
     reviewedAt: row.reviewed_at,
     reviewedBy: row.reviewed_by,
@@ -256,6 +254,8 @@ function serializeAdminPayout(row: AdminPayoutRow) {
 
   return {
     ...serializePayout(row, row.user_balance_cents),
+    adminComment: row.admin_comment,
+    createdByAdminId: row.created_by_admin_id,
     ambassador: {
       id: row.user_id,
       email: row.user_email ?? row.latest_application_email,
