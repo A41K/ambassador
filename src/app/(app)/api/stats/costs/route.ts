@@ -146,10 +146,14 @@ export async function GET(request: Request) {
   // manual balance adjustments.
   const adminCents = costs.admin_payout_cents + costs.positive_adjustment_cents;
 
-  // 5. Office grants: grant spend out of the campaign's HCB org.
+  // 5. Office grants and 6. reimbursements, both out of the campaign's HCB org.
+  // Office-grant cost is the money trapped in active grants (the full committed
+  // amount, not just what's been spent); reimbursements are expense payouts.
   let grantCents = 0;
+  let reimbursementCents = 0;
   if (grantResult.ok) {
-    grantCents = grantResult.data.cents;
+    grantCents = grantResult.data.grantCents;
+    reimbursementCents = grantResult.data.reimbursementCents;
     if (grantResult.data.stale) {
       warnings.push("office_grant_cost_stale: served a cached value; HCB was unreachable");
     }
@@ -161,8 +165,9 @@ export async function GET(request: Request) {
     warnings.push(`office_grant_cost_unavailable: ${message}`);
   }
 
-  // 6. Total of all five buckets.
-  const totalCents = posterCents + referralCents + shirtCents + adminCents + grantCents;
+  // 7. Total of all buckets.
+  const totalCents =
+    posterCents + referralCents + shirtCents + adminCents + grantCents + reimbursementCents;
 
   // Region breakdown, seeded so every supported region (plus 'Unknown' for
   // ambassadors without one) is always present even at zero.
@@ -189,6 +194,7 @@ export async function GET(request: Request) {
     shirtCost: usd(shirtCents),
     adminCost: usd(adminCents),
     officeGrantCost: usd(grantCents),
+    reimbursementCost: usd(reimbursementCents),
     total: usd(totalCents),
     totalApprovedAmbassadors: String(totalApprovedAmbassadors),
     averageCostPerAmbassador: usd(averageCostCents),

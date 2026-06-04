@@ -1,80 +1,72 @@
 import "server-only";
 
-type HcbTransaction = {
-  amount_cents?: number;
-  type?: string;
-  memo?: string | null;
-};
+import {
+  listHcbOrganizationCardGrants,
+  listHcbOrganizationTransactions,
+} from "@/lib/hcb/service";
 
 export type OfficeGrantCost = {
-  cents: number;
+  /** Money trapped in active office grants: the full amount committed to each. */
+  grantCents: number;
+  /** Reimbursement (expense) payouts that left the org. */
+  reimbursementCents: number;
   grantCount: number;
+  reimbursementCount: number;
   fetchedAt: string;
   /** True when HCB couldn't be reached and a previously cached value is served. */
   stale: boolean;
 };
 
+// The campaign's HCB org (org_lbu4gX is the slug stardance-marketing-campaign);
+// office grants are issued from, and reimbursements are paid out of, this org.
+const HCB_CAMPAIGN_ORGANIZATION_ID = "org_lbu4gX";
+
 let cached: { data: OfficeGrantCost; expiresAt: number } | null = null;
 
-// Outgoing (negative) grant spend only, so a later-cancelled grant still counts
-// (its refund returns as a separate positive transfer we ignore). card_grant and
-// reimbursed_expense are grants/reimbursements; topups are sometimes booked as a
-// plain transfer with a "Topup of grant to ..." memo.
-function isOfficeGrantSpend(txn: HcbTransaction) {
-  const amountCents = Number(txn.amount_cents);
-  if (!Number.isFinite(amountCents) || amountCents >= 0) {
-    return false;
-  }
-
-  if (txn.type === "card_grant" || txn.type === "reimbursed_expense") {
-    return true;
-  }
-
-  return txn.type === "transfer" && /top\s?up of grant/i.test(txn.memo ?? "");
-}
-
 async function fetchOfficeGrantCost(): Promise<OfficeGrantCost> {
-  let cents = 0;
+  const [grants, transactions] = await Promise.all([
+    listHcbOrganizationCardGrants(HCB_CAMPAIGN_ORGANIZATION_ID),
+    listHcbOrganizationTransactions(HCB_CAMPAIGN_ORGANIZATION_ID),
+  ]);
+
+  // Money trapped in office grants: the full amount committed to every active
+  // grant, whether the holder has spent it yet or not. A canceled grant is
+  // refunded to the org, so its money is no longer trapped.
+  let grantCents = 0;
   let grantCount = 0;
-  let totalPages = 1;
-  let page = 1;
-
-  while (page <= totalPages && page <= 50) {
-    const response = await fetch(
-      `https://hcb.hackclub.com/api/v3/organizations/stardance-marketing-campaign/transactions?per_page=100&page=${page}`,
-      { cache: "no-store", signal: AbortSignal.timeout(10_000) },
-    );
-
-    if (!response.ok) {
-      throw new Error(`HCB transactions request failed (${response.status})`);
+  for (const grant of grants) {
+    if (grant.status === "active") {
+      grantCents += grant.amountCents;
+      grantCount += 1;
     }
-
-    const headerPages = Number(response.headers.get("x-total-pages"));
-    if (Number.isFinite(headerPages) && headerPages >= 1) {
-      totalPages = headerPages;
-    }
-
-    const transactions: unknown = await response.json();
-    if (!Array.isArray(transactions)) {
-      throw new Error("Unexpected HCB transactions payload");
-    }
-
-    for (const txn of transactions as HcbTransaction[]) {
-      if (isOfficeGrantSpend(txn)) {
-        cents += Math.abs(Number(txn.amount_cents));
-        grantCount += 1;
-      }
-    }
-
-    page += 1;
   }
 
-  return { cents, grantCount, fetchedAt: new Date().toISOString(), stale: false };
+  // Reimbursements: expense payouts out of the org. Outgoing (negative) amounts
+  // only; a reversed or declined payout never actually left the org.
+  let reimbursementCents = 0;
+  let reimbursementCount = 0;
+  for (const txn of transactions) {
+    if (txn.expensePayoutReportId === null || txn.reversed || txn.declined || txn.amountCents >= 0) {
+      continue;
+    }
+    reimbursementCents += Math.abs(txn.amountCents);
+    reimbursementCount += 1;
+  }
+
+  return {
+    grantCents,
+    reimbursementCents,
+    grantCount,
+    reimbursementCount,
+    fetchedAt: new Date().toISOString(),
+    stale: false,
+  };
 }
 
 /**
- * Total office-grant spend in cents from the campaign's HCB Transparency feed,
- * cached for an hour. Pass forceRefresh to bypass the cache. If HCB is
+ * Office-grant cost in cents from the campaign's HCB org via the authenticated
+ * v4 API, cached for an hour. The total is the money trapped in active grants
+ * plus reimbursement payouts. Pass forceRefresh to bypass the cache. If HCB is
  * unreachable a previously cached value is returned with stale=true; with no
  * cache at all the error propagates to the caller.
  */

@@ -63,6 +63,18 @@ export type HcbCardGrant = {
   organizationName: string | null;
 };
 
+export type HcbTransaction = {
+  id: string;
+  amountCents: number;
+  date: string | null;
+  memo: string | null;
+  pending: boolean;
+  reversed: boolean;
+  declined: boolean;
+  /** Set when this transaction is a reimbursement (expense) payout. */
+  expensePayoutReportId: string | null;
+};
+
 export class HcbApiError extends Error {
   status: number;
   body: unknown;
@@ -162,6 +174,30 @@ function normalizeCardGrant(payload: unknown): HcbCardGrant {
       ? organization.id
       : null,
     organizationName: organization !== null ? toStringOrNull(organization.name) : null,
+  };
+}
+
+function normalizeTransaction(payload: unknown): HcbTransaction {
+  const record = parseJsonRecord(payload);
+
+  if (record === null || typeof record.id !== "string" || typeof record.amount_cents !== "number") {
+    throw new Error("HCB transaction response was invalid");
+  }
+
+  const expensePayout = parseJsonRecord(record.expense_payout);
+
+  return {
+    id: record.id,
+    amountCents: record.amount_cents,
+    date: toStringOrNull(record.date),
+    memo: toStringOrNull(record.memo),
+    pending: record.pending === true,
+    reversed: record.reversed === true,
+    declined: record.declined === true,
+    expensePayoutReportId:
+      expensePayout !== null && typeof expensePayout.report_id === "string"
+        ? expensePayout.report_id
+        : null,
   };
 }
 
@@ -487,6 +523,60 @@ export async function listHcbOrganizationCardGrants(organizationId: string) {
   }
 
   return body.map((entry) => normalizeCardGrant(entry));
+}
+
+/**
+ * Every transaction in an org's ledger. The v4 transactions endpoint pages by
+ * cursor: it returns a fixed-size batch with a `has_more` flag, and the next
+ * page is requested with `after` set to the last id of the previous one
+ * (`per_page`/`page` are ignored). `maxPages` bounds the sweep; dedup by id
+ * guards against an ignored cursor looping forever.
+ */
+export async function listHcbOrganizationTransactions(
+  organizationId: string,
+  options: { maxPages?: number } = {},
+): Promise<HcbTransaction[]> {
+  const maxPages = options.maxPages ?? 200;
+  const transactions: HcbTransaction[] = [];
+  const seen = new Set<string>();
+  let after: string | null = null;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const query = new URLSearchParams({ per_page: "100" });
+    if (after !== null) {
+      query.set("after", after);
+    }
+
+    const body = await requestHcbJson(
+      `/api/v4/organizations/${encodeURIComponent(organizationId)}/transactions?${query}`,
+    );
+    const record = parseJsonRecord(body);
+    const data = Array.isArray(record?.data) ? record.data : Array.isArray(body) ? body : null;
+
+    if (data === null) {
+      throw new Error("HCB organization transactions response was invalid");
+    }
+
+    let added = 0;
+    let lastIdOnPage: string | null = null;
+    for (const entry of data) {
+      const transaction = normalizeTransaction(entry);
+      lastIdOnPage = transaction.id;
+      if (seen.has(transaction.id)) {
+        continue;
+      }
+      seen.add(transaction.id);
+      transactions.push(transaction);
+      added += 1;
+    }
+
+    if (added === 0 || record?.has_more === false || lastIdOnPage === null) {
+      break;
+    }
+    after = lastIdOnPage;
+  }
+
+  return transactions;
 }
 
 export async function createHcbOrganizationCardGrant(input: {
