@@ -8,7 +8,7 @@ import sql from "@/lib/database/client";
 import { ensureSchema } from "@/lib/database/ensure-schema";
 import { isSameOriginRequest } from "@/lib/http";
 import { getActorSession } from "@/lib/session";
-import { buildEmptyShirtStockBySize, SHIRT_SIZES, shirtSku } from "@/lib/shop";
+import { buildEmptyShirtStockBySize, SHIRT_SIZES, SHIRT_UNIT_COST, shirtSku } from "@/lib/shop";
 import { loadAvailableShirtStockBySize } from "@/lib/shirt/stock";
 import { WarehouseApiClient } from "@/lib/warehouse";
 
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       (order.status === "dispatched" || order.status === "mailed") &&
       ambassadorOrderIds.has(order.id)
     ) {
-      contentsCost += Number(order.contents_cost ?? 0);
+      contentsCost += SHIRT_UNIT_COST;
       laborCost += Number(order.labor_cost ?? 0);
       postageCost += Number(order.postage_cost ?? 0);
       sentCount++;

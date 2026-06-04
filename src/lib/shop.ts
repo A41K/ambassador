@@ -3,6 +3,11 @@ export type ShirtSize = (typeof SHIRT_SIZES)[number];
 export type ShirtStockBySize = Record<ShirtSize, number | null>;
 export const SHIRT_SKU_PREFIX = "Swa/Shirt/HC/";
 
+// What one shirt costs us. The warehouse doesn't report a contents cost, so we
+// apply this known per-shirt spend (each order is a single shirt) wherever shirt
+// expenditure is totalled.
+export const SHIRT_UNIT_COST = 11.31;
+
 export function isShirtSize(value: unknown): value is ShirtSize {
   return typeof value === "string" && (SHIRT_SIZES as readonly string[]).includes(value);
 }

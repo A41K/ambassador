@@ -6,7 +6,7 @@ import { optionalEnv } from "@/lib/env";
 import { getOfficeGrantCost } from "@/lib/hcb/office-grant-cost";
 import { POSTER_PAYOUT_CENTS, REFERRAL_PAYOUT_CENTS } from "@/lib/payouts/service";
 import { SUPPORTED_AMBASSADOR_REGIONS } from "@/lib/settings";
-import { SHIRT_SIZES, shirtSku } from "@/lib/shop";
+import { SHIRT_SIZES, SHIRT_UNIT_COST, shirtSku } from "@/lib/shop";
 import { WarehouseApiClient } from "@/lib/warehouse";
 
 export const runtime = "nodejs";
@@ -162,8 +162,8 @@ export async function GET(request: Request) {
 
   // 3. Shirts: what we paid to fulfil ambassador shirt orders that actually
   // shipped. The warehouse doesn't report a contents cost, so use our known
-  // per-shirt spend of $11.31 (each order is a single shirt); labor and postage
-  // come from the warehouse. Costs are in dollars, so round to cents.
+  // per-shirt spend (SHIRT_UNIT_COST); labor and postage come from the
+  // warehouse. Costs are in dollars, so round to cents.
   let shirtCents = 0;
   let shirtCentsUS = 0;
   if (warehouseOrders === null) {
@@ -183,7 +183,7 @@ export async function GET(request: Request) {
         ambassadorOrderIds.has(order.id)
       ) {
         const orderDollars =
-          11.31 +
+          SHIRT_UNIT_COST +
           Number(order.labor_cost ?? 0) +
           Number(order.postage_cost ?? 0);
         shirtDollars += orderDollars;
