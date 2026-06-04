@@ -5,6 +5,7 @@ import { ensureSchema } from "@/lib/database/ensure-schema";
 import { optionalEnv } from "@/lib/env";
 import { getOfficeGrantCost } from "@/lib/hcb/office-grant-cost";
 import { POSTER_PAYOUT_CENTS, REFERRAL_PAYOUT_CENTS } from "@/lib/payouts/service";
+import { SUPPORTED_AMBASSADOR_REGIONS } from "@/lib/settings";
 import { SHIRT_SIZES, shirtSku } from "@/lib/shop";
 import { WarehouseApiClient } from "@/lib/warehouse";
 
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
   const shirtSkus = SHIRT_SIZES.map((size) => shirtSku(size));
   const warnings: string[] = [];
 
-  const [costRows, warehouseOrders, linkedRows, grantResult] = await Promise.all([
+  const [costRows, ambassadorRows, warehouseOrders, linkedRows, grantResult] = await Promise.all([
     sql<CostRow[]>`
       SELECT
         (SELECT COUNT(*) FROM posters
@@ -75,6 +76,25 @@ export async function GET(request: Request) {
         (SELECT COALESCE(SUM(amount_cents), 0) FROM payout_balance_events
           WHERE reason = 'manual_adjustment'
             AND amount_cents > 0)::int AS positive_adjustment_cents
+    `,
+    // Approved ambassadors per region. "Approved" mirrors
+    // hasApprovedAmbassadorStatus: a manual 'approved' state, or a latest
+    // application that is Accepted (legacy 'approved' included).
+    sql<{ region: string; count: number }[]>`
+      SELECT
+        COALESCE(users.ambassador_region, 'Unknown') AS region,
+        COUNT(*)::int AS count
+      FROM users
+      LEFT JOIN LATERAL (
+        SELECT status
+        FROM applications
+        WHERE user_id = users.id
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      ) latest_application ON true
+      WHERE users.manual_dashboard_state = 'approved'
+        OR latest_application.status IN ('Accepted', 'approved')
+      GROUP BY COALESCE(users.ambassador_region, 'Unknown')
     `,
     new WarehouseApiClient().listOrders().catch(() => null),
     sql<{ warehouse_order_id: string }[]>`
@@ -144,6 +164,20 @@ export async function GET(request: Request) {
   // 6. Total of all five buckets.
   const totalCents = posterCents + referralCents + shirtCents + adminCents + grantCents;
 
+  // Region breakdown, seeded so every supported region (plus 'Unknown' for
+  // ambassadors without one) is always present even at zero.
+  const ambassadorRegionBreakdown: Record<string, number> = Object.fromEntries(
+    [...SUPPORTED_AMBASSADOR_REGIONS, "Unknown"].map((region) => [region, 0]),
+  );
+  let totalApprovedAmbassadors = 0;
+  for (const row of ambassadorRows) {
+    ambassadorRegionBreakdown[row.region] =
+      (ambassadorRegionBreakdown[row.region] ?? 0) + row.count;
+    totalApprovedAmbassadors += row.count;
+  }
+  const averageCostCents =
+    totalApprovedAmbassadors > 0 ? totalCents / totalApprovedAmbassadors : 0;
+
   return Response.json({
     currency: "USD",
     posterCost: usd(posterCents),
@@ -152,6 +186,9 @@ export async function GET(request: Request) {
     adminCost: usd(adminCents),
     officeGrantCost: usd(grantCents),
     total: usd(totalCents),
+    totalApprovedAmbassadors,
+    averageCostPerAmbassador: usd(averageCostCents),
+    ambassadorRegionBreakdown,
     warnings,
     complete: warnings.length === 0,
     generatedAt: new Date().toISOString(),
