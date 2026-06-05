@@ -215,6 +215,10 @@ export function PriorityDashboard({
     return { totalHoursLogged: logged, totalHoursApproved: approved };
   }, [activityData, scope]);
 
+  // Per referral counts every non-rejected referral; per successful referral
+  // counts only verified ones.
+  const perReferral =
+    totalCents !== null && signupsValue > 0 ? totalCents / 100 / signupsValue : null;
   const perSuccessfulReferral =
     totalCents !== null && completedValue > 0 ? totalCents / 100 / completedValue : null;
   const perHourShipped =
@@ -409,6 +413,22 @@ export function PriorityDashboard({
             <h2 className="mb-6 text-2xl text-foreground">{t("cost-efficiency-title")}</h2>
             <div className="grid grid-cols-2 items-start gap-x-6 gap-y-6">
               <Kpi
+                label={t("efficiency.per-referral")}
+                value={cost.status === "loading" ? "…" : fmtRate(perReferral)}
+              />
+              <Kpi
+                label={t.rich("efficiency.per-successful-referral", {
+                  success: (chunks) => (
+                    <span className="font-bold text-[var(--acceptance)]">{chunks}</span>
+                  ),
+                })}
+                value={cost.status === "loading" ? "…" : fmtRate(perSuccessfulReferral)}
+              />
+              <Kpi
+                label={t("efficiency.per-hour-shipped")}
+                value={cost.status === "loading" ? "…" : fmtRate(perHourShipped)}
+              />
+              <Kpi
                 label={t("efficiency.hours-shipped")}
                 value={hoursFormatter.format(totalHoursLogged)}
                 sub={t("efficiency.by-users", { count: loggedUsers })}
@@ -430,14 +450,6 @@ export function PriorityDashboard({
                     ) : null}
                   </>
                 }
-              />
-              <Kpi
-                label={t("efficiency.per-successful-referral")}
-                value={cost.status === "loading" ? "…" : fmtRate(perSuccessfulReferral)}
-              />
-              <Kpi
-                label={t("efficiency.per-hour-shipped")}
-                value={cost.status === "loading" ? "…" : fmtRate(perHourShipped)}
               />
             </div>
           </section>
@@ -597,7 +609,7 @@ export function PriorityDashboard({
   );
 }
 
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: React.ReactNode }) {
+function Kpi({ label, value, sub }: { label: React.ReactNode; value: string; sub?: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="font-body text-sm text-secondary">{label}</span>

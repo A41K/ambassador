@@ -605,7 +605,8 @@ admin:
       efficiency:
         hours-shipped: Hours shipped
         hours-approved: Hours approved
-        per-successful-referral: $ per successful referral
+        per-referral: $ per referral
+        per-successful-referral: "$ per <success>successful</success> referral"
         per-hour-shipped: $ per hour shipped
         by-users: "by {count} users"
         for-users: "for {count} users"
